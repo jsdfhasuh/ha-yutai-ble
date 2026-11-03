@@ -1,0 +1,59 @@
+{
+  "title": "\u79b9\u6cf0\u84dd\u7259\u63d2\u5ea7",
+  "config": {
+    "step": {
+      "user": {
+        "title": "\u79b9\u6cf0\u8ba1\u91cf\u63d2\u5ea7",
+        "data": {
+          "name": "\u540d\u79f0",
+          "address": "\u84dd\u7259\u5730\u5740",
+          "model": "\u578b\u53f7",
+          "gatt_ltmk": "GATT \u957f\u671f\u5bc6\u94a5"
+        }
+      }
+    },
+    "error": {
+      "invalid_config": "\u8bbe\u5907\u5730\u5740\u3001\u578b\u53f7\u6216\u5bc6\u94a5\u4e0d\u6b63\u786e\u3002",
+      "cannot_connect": "\u672a\u80fd\u9a8c\u8bc1\u672c\u5730\u84dd\u7259\u8bfb\u53d6\u7ed3\u679c\u3002"
+    },
+    "abort": {
+      "already_configured": "\u6b64\u63d2\u5ea7\u5df2\u6dfb\u52a0\u3002",
+      "invalid_config": "\u8bbe\u5907\u5730\u5740\u3001\u578b\u53f7\u6216\u5bc6\u94a5\u4e0d\u6b63\u786e\u3002",
+      "cannot_connect": "\u672a\u80fd\u9a8c\u8bc1\u672c\u5730\u84dd\u7259\u8bfb\u53d6\u7ed3\u679c\u3002"
+    }
+  },
+  "options": {
+    "step": {"init": {"title": "\u8f6e\u8be2\u8bbe\u7f6e", "data": {"poll_interval": "\u8f6e\u8be2\u95f4\u9694\uff08\u79d2\uff09"}}},
+    "error": {"invalid_interval": "\u8bf7\u8f93\u5165 30 \u81f3 3600 \u4e4b\u95f4\u7684\u6574\u6570\u3002"}
+  },
+  "exceptions": {
+    "invalid_countdown_duration": {
+      "message": "\u8bf7\u8f93\u5165 1 \u81f3 59 \u79d2\uff1b\u4e00\u5206\u949f\u8d77\u4ec5\u652f\u6301 60 \u7684\u6574\u6570\u500d\uff0c\u6700\u5927 86340 \u79d2\uff0823 \u5c0f\u65f6 59 \u5206\u949f\uff09\u3002"
+    }
+  },
+  "entity": {
+    "select": {
+      "indicator_mode": {"name": "\u6307\u793a\u706f\u6a21\u5f0f", "state": {"follow": "\u8ddf\u968f\u8bbe\u5907\u72b6\u6001", "inverse": "\u4e0e\u8bbe\u5907\u72b6\u6001\u76f8\u53cd", "off": "\u5e38\u706d\u72b6\u6001", "always_on": "\u5e38\u4eae\u72b6\u6001"}},
+      "power_on_state": {"name": "\u901a\u7535\u9ed8\u8ba4\u72b6\u6001", "state": {"off": "\u5173\u95ed\u72b6\u6001", "on": "\u5f00\u542f\u72b6\u6001", "memory": "\u8bb0\u5fc6\u72b6\u6001"}}
+    },
+    "switch": {
+      "relay_control": {"name": "\u63d2\u5ea7\u603b\u5f00\u5173"},
+      "indicator_dnd_enabled": {"name": "\u6307\u793a\u706f\u52ff\u6270"},
+      "double_click_enabled": {"name": "\u53cc\u51fb\u5012\u8ba1\u65f6"}
+    },
+    "time": {
+      "indicator_dnd_start": {"name": "\u6307\u793a\u706f\u52ff\u6270\u5f00\u59cb\u65f6\u95f4"},
+      "indicator_dnd_end": {"name": "\u6307\u793a\u706f\u52ff\u6270\u7ed3\u675f\u65f6\u95f4"}
+    },
+    "number": {"double_click_seconds": {"name": "\u53cc\u51fb\u5012\u8ba1\u65f6\u65f6\u957f"}},
+    "sensor": {
+      "connection_status": {"name": "\u901a\u4fe1\u72b6\u6001", "state": {"verified": "\u6700\u8fd1\u8bfb\u53d6\u6210\u529f", "retrying": "\u7b49\u5f85\u91cd\u8fde", "initializing": "\u7b49\u5f85\u9996\u6b21\u8bfb\u53d6"}},
+      "last_success": {"name": "\u6700\u8fd1\u6210\u529f\u8bfb\u53d6"},
+      "consecutive_failures": {"name": "\u8fde\u7eed\u5931\u8d25\u6b21\u6570"},
+      "voltage": {"name": "\u7535\u538b"},
+      "current": {"name": "\u7535\u6d41"},
+      "power": {"name": "\u529f\u7387"}
+    },
+    "binary_sensor": {"relay_output": {"name": "\u63d2\u5ea7\u8f93\u51fa"}}
+  }
+}

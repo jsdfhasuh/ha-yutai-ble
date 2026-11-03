@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.cmd text eol=crlf
+custom_components/yutai_ble/protocol/vendor/* -text
+tools/auth/vendor/* -text

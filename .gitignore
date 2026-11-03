@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+private/
+*.dpapi
+.storage/
+secrets.yaml
+*.log
+*.zip
+dist/
+reports/
+backups/
+.DS_Store
+.idea/
+.vscode/

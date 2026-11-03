@@ -1,0 +1,59 @@
+{
+  "title": "Yutai BLE",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yutai Metering Socket",
+        "data": {
+          "name": "Name",
+          "address": "Bluetooth address",
+          "model": "Model",
+          "gatt_ltmk": "GATT long-term key"
+        }
+      }
+    },
+    "error": {
+      "invalid_config": "The device identity or key is invalid.",
+      "cannot_connect": "A local Bluetooth read could not be verified."
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "invalid_config": "The device identity or key is invalid.",
+      "cannot_connect": "A local Bluetooth read could not be verified."
+    }
+  },
+  "options": {
+    "step": {"init": {"title": "Polling", "data": {"poll_interval": "Polling interval (seconds)"}}},
+    "error": {"invalid_interval": "Enter an integer from 30 to 3600."}
+  },
+  "exceptions": {
+    "invalid_countdown_duration": {
+      "message": "Enter 1-59 seconds, or whole minutes from 60 to 86340 seconds (23 h 59 min)."
+    }
+  },
+  "entity": {
+    "select": {
+      "indicator_mode": {"name": "Indicator mode", "state": {"follow": "Follow output", "inverse": "Inverse output", "off": "Off", "always_on": "Always on"}},
+      "power_on_state": {"name": "Power-on state", "state": {"off": "Off", "on": "On", "memory": "Restore previous state"}}
+    },
+    "switch": {
+      "relay_control": {"name": "Main switch"},
+      "indicator_dnd_enabled": {"name": "Indicator do not disturb"},
+      "double_click_enabled": {"name": "Double-click countdown"}
+    },
+    "time": {
+      "indicator_dnd_start": {"name": "Indicator do not disturb start"},
+      "indicator_dnd_end": {"name": "Indicator do not disturb end"}
+    },
+    "number": {"double_click_seconds": {"name": "Double-click countdown duration"}},
+    "sensor": {
+      "connection_status": {"name": "Communication status", "state": {"verified": "Read verified", "retrying": "Waiting to reconnect", "initializing": "Awaiting first read"}},
+      "last_success": {"name": "Last verified read"},
+      "consecutive_failures": {"name": "Consecutive failed refreshes"},
+      "voltage": {"name": "Voltage"},
+      "current": {"name": "Current"},
+      "power": {"name": "Power"}
+    },
+    "binary_sensor": {"relay_output": {"name": "Output"}}
+  }
+}
