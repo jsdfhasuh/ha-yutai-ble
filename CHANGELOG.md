@@ -8,6 +8,8 @@
 - Retain global BLE serialization, disconnect cleanup, read backoff and no write retries.
 - Bundle an optional portable Windows QR tool; keep keys out of distribution files.
 - Add Chinese installation, upgrade, rollback and compatibility documentation.
+- Publish separate fsov7m and wiing v7icm research sources with sanitized,
+  per-request identities and offline tests. These are not added to the HA model allowlist.
 
 This release has offline tests only. Multi-device physical operation and the
 packaged relay control path have not received real-hardware acceptance testing.

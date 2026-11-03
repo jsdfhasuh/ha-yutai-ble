@@ -1,6 +1,7 @@
 # 禹泰蓝牙插座 · Yutai BLE
 
 Home Assistant 自定义集成，通过本地蓝牙控制禹泰计量版插座。
+仓库同时公开普通版和炎米 Y1 的独立协议测试源码，覆盖此前测试过的三款插座。
 它是 **HA 集成（custom integration）**，不是独立 App，也不是 Supervisor 加载项。
 
 ## 支持范围
@@ -15,7 +16,17 @@ Home Assistant 自定义集成，通过本地蓝牙控制禹泰计量版插座�
 | 诊断 | 通信状态、最近成功读取、连续失败次数、输出状态 |
 | 尚未提供 | kWh 电量统计、本地定时、循环定时、其他型号适配 |
 
-`yutai.plug.fsov7m`、`wiing.plug.v7icm` 等型号**不在此版本支持范围内**。
+### 三款已测试型号的源码
+
+| 型号 | 名称 | 本仓库提供的内容 |
+| --- | --- | --- |
+| `yutai.plug.fsov8m` | 禹泰电工计量版 | [HA 集成](custom_components/yutai_ble)，可通过 HACS / ZIP 安装 |
+| `yutai.plug.fsov7m` | 禹泰电工普通版 / WY-E802 | [独立研究源码](research/yutai_fsov7m)，开关、指示灯/通电设置、本地/循环定时 |
+| `wiing.plug.v7icm` | AlmLbS 智能插座 / 炎米 Y1 | [独立研究源码](research/wiing_v7icm)，鉴权、状态读取、空载开关与恢复测试 |
+
+后两款的源码已公开，但**尚未接成这个 HACS 集成的设备入口**，不能直接在 HA 表单中添加。
+研究代码不会随 HACS 安装，也不会被集成自动加载。下载仓库的 Source code ZIP 可获取三款全部源码。
+详见 [型号与验证范围](docs/MODELS.md) 和 [研究源码说明](research/README.md)。
 同品牌或名称带有“Mesh”不代表协议、属性编号相同。
 
 此版本为实验性版本。已有单台设备的读取和设置实测基础；0.4.0 的多设备改造
@@ -97,6 +108,8 @@ Python 3.13+，仅标准库即可运行集成及协议模拟测试，不访问 H
 ```sh
 python -B -m unittest discover -s tests -v
 python -B -m unittest discover -s tests/protocol -v
+python -B -m unittest discover -s research/yutai_fsov7m -v
+python -B -m unittest discover -s research/wiing_v7icm -v
 python -B tools/build_release.py
 ```
 

@@ -46,7 +46,7 @@ def build(destination):
     version = json.loads((ROOT / COMPONENT / "manifest.json").read_text(encoding="utf-8"))["version"]
     integration = destination / f"yutai-ble-v{version}.zip"
     helper = destination / f"yutai-ble-qr-windows-v{version}.zip"
-    docs = [(name, name) for name in ("README.md", "docs/INSTALL.md", "LICENSE", "THIRD_PARTY_NOTICES.md")]
+    docs = [(name, name) for name in ("README.md", "docs/INSTALL.md", "docs/MODELS.md", "LICENSE", "THIRD_PARTY_NOTICES.md")]
     archive(integration, [(f"{COMPONENT}/{name}", f"{COMPONENT}/{name}") for name in COMPONENT_FILES] + docs)
     archive(helper, [(f"tools/auth/{name}", name) for name in AUTH_FILES]
             + [("LICENSE", "LICENSE"), ("THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md")])

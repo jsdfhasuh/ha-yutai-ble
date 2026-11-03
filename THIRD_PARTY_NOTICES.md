@@ -11,6 +11,13 @@ The original license is retained at `protocol/vendor/LICENSE`. Their exact bytes
 are hash-checked by the worker. The wrapper replaces the command and lifecycle
 paths; it does not modify these vendor files.
 
+The same pinned vendor sources and MIT license are also retained independently
+in `research/yutai_fsov7m/vendor` and `research/wiing_v7icm/vendor`.
+Upstream: https://github.com/clairefiorettiythzr6802-eng/xiaomi-diffuser-ble
+Commit: `96268a53e3c8ba4443dd322ecaede606ec7c89c6`.
+The research wrappers originated in model-specific device experiments; their
+published copies replace personal addresses with validated per-request targets.
+
 ## Optional QR helper
 
 `tools/auth/vendor/cloud.py` is an asynchronous Xiaomi QR login implementation

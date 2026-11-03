@@ -24,6 +24,10 @@ jobs:
         run: python -B -m unittest discover -s tests/protocol -v
       - name: Build packages
         run: python -B tools/build_release.py
+      - name: Yutai fsov7m research tests (offline only)
+        run: python -B -m unittest discover -s research/yutai_fsov7m -v
+      - name: Wiing v7icm research tests (offline only)
+        run: python -B -m unittest discover -s research/wiing_v7icm -v
       - uses: actions/upload-artifact@v4
         with:
           name: yutai-ble-python-${{ matrix.python-version }}
