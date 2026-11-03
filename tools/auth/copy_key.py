@@ -7,7 +7,7 @@ import re
 
 def decode_payload(raw):
     data = json.loads(raw)
-    if (not isinstance(data, dict) or data.get("model") != "yutai.plug.fsov8m"
+    if (not isinstance(data, dict) or data.get("model") not in ("yutai.plug.fsov8m", "yutai.plug.fsov7m")
             or not isinstance(data.get("address"), str)
             or re.fullmatch(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", data["address"]) is None
             or not isinstance(data.get("gatt_ltmk"), str)
@@ -73,7 +73,7 @@ def main():
         root.mainloop()
         return 0
     except Exception:
-        messagebox.showerror("未完成", "无法读取此文件。请使用创建文件的 Windows 用户，确认型号为 fsov8m 且包含 GATT 长期密钥。")
+        messagebox.showerror("未完成", "无法读取此文件。请使用创建文件的 Windows 用户，确认型号为 fsov8m 或 fsov7m 且包含 GATT 长期密钥。")
         return 1
     finally:
         try:

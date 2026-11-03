@@ -45,6 +45,7 @@ def load_flow():
     vol = stubs["voluptuous"]
     vol.Schema = lambda value: value
     vol.Required = lambda key, **kwargs: key
+    vol.In = lambda choices: tuple(choices)
     entries = stubs["homeassistant.config_entries"]
     entries.ConfigEntry = entries.ConfigFlowResult = object
     entries.ConfigFlow = entries.OptionsFlow = FlowStub
@@ -95,6 +96,6 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_model_rejected_before_bluetooth(self):
         flow = flow_module.YutaiConfigFlow()
         with patch.object(flow_module.BridgeClient, "read", AsyncMock()) as read:
-            result = await flow.async_step_import({**config_data(), "model": "yutai.plug.fsov7m"})
+            result = await flow.async_step_import({**config_data(), "model": "wiing.plug.v7icm"})
         self.assertEqual(result["reason"], "invalid_config")
         read.assert_not_awaited()

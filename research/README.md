@@ -7,8 +7,9 @@ HACS 不会安装或加载这个目录。
 - [炎米 Y1 `wiing.plug.v7icm`](wiing_v7icm/README.md)
 - [三款型号完整验证范围](../docs/MODELS.md)
 
-计量版代码位于 `custom_components/yutai_ble`。GitHub 的 Source code ZIP 包含三款源码。
-Release 中 `yutai-ble-v0.4.0.zip` 仅用于安装 HA 集成，不包含研究脚本。
+普通版基础控制和计量版的 HA 代码位于 `custom_components/yutai_ble`。
+GitHub 的 Source code ZIP 包含三款源码。
+Release 中 `yutai-ble-v0.5.0.zip` 仅用于安装 HA 集成，不包含研究脚本。
 
 ## 与历史私有实验的差异
 

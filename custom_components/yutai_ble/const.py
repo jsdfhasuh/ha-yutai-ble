@@ -3,8 +3,8 @@
 DOMAIN = "yutai_ble"
 CONF_GATT_LTMK = "gatt_ltmk"
 CONF_POLL_INTERVAL = "poll_interval"
-from .protocol.device_identity import SUPPORTED_MODEL
-DEFAULT_NAME = "\u79b9\u6cf0\u8ba1\u91cf\u63d2\u5ea7"
+from .protocol.device_identity import ORDINARY_MODEL, SUPPORTED_MODEL, SUPPORTED_MODELS
+DEFAULT_NAME = "\u79b9\u6cf0\u84dd\u7259\u63d2\u5ea7"
 DEFAULT_POLL_INTERVAL = 60
 MIN_POLL_INTERVAL = 30
 MAX_POLL_INTERVAL = 3600
@@ -21,4 +21,16 @@ FIELD_KINDS = {
     "indicator_dnd_end": "time",
     "double_click_enabled": "switch",
     "double_click_seconds": "number",
+}
+
+MODEL_FIELDS = {
+    SUPPORTED_MODEL: frozenset(FIELD_KINDS),
+    ORDINARY_MODEL: frozenset(("indicator_mode", "power_on_state")),
+}
+MODEL_SELECT_OPTIONS = {
+    SUPPORTED_MODEL: SELECT_OPTIONS,
+    ORDINARY_MODEL: {
+        "indicator_mode": ("follow", "off"),
+        "power_on_state": ("off", "on", "memory"),
+    },
 }

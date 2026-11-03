@@ -13,7 +13,7 @@ COMPONENT_FILES = (
     "coordinator.py", "entity.py", "manifest.json", "models.py", "number.py",
     "select.py", "sensor.py", "strings.json", "switch.py", "time.py",
     "translations/en.json", "translations/zh-Hans.json",
-    "protocol/bridge_worker.py", "protocol/device_identity.py", "protocol/read_probe.py",
+    "protocol/bridge_worker.py", "protocol/device_identity.py", "protocol/fsov7_codec.py", "protocol/read_probe.py",
     "protocol/relay_control.py", "protocol/settings_codec.py", "protocol/settings_control.py",
     "protocol/settings_scan.py", "protocol/vendor/channel.py",
     "protocol/vendor/miot_ble_specv2.py", "protocol/vendor/LICENSE",

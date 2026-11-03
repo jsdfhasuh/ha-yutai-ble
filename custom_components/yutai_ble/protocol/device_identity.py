@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 import re
 
 SUPPORTED_MODEL = "yutai.plug.fsov8m"
+ORDINARY_MODEL = "yutai.plug.fsov7m"
+SUPPORTED_MODELS = (SUPPORTED_MODEL, ORDINARY_MODEL)
 
 
 def validate_identity(address, model):
-    if not isinstance(address, str) or model != SUPPORTED_MODEL:
+    if not isinstance(address, str) or model not in SUPPORTED_MODELS:
         raise ValueError("unsupported_device")
     address = address.strip().upper()
     if (re.fullmatch(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}", address) is None

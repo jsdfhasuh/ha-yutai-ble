@@ -1,7 +1,7 @@
 {
   "title": "Yutai BLE",
   "config": {
-    "step": {"user": {"title": "Yutai Metering Socket", "data": {
+    "step": {"user": {"title": "Yutai Bluetooth Socket", "data": {
       "name": "Name", "address": "Bluetooth address", "model": "Model", "gatt_ltmk": "GATT long-term key"
     }}},
     "error": {"invalid_config": "The device identity or key is invalid.", "cannot_connect": "A local Bluetooth read could not be verified."},

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- Add ordinary Yutai `yutai.plug.fsov7m` to the HA configuration flow.
+- Dispatch a separate fsov7m codec for relay control, indicator follow/off,
+  and power-on off/on/memory settings. Do not infer fsov8m-only capabilities.
+- Hide metering, DND and double-click entities on fsov7m; reject mismatched
+  capabilities again at the HA boundary.
+- Share existing serialized transport, read backoff and no-write-retry protections.
+- Allow the Windows key-copy helper to handle both Yutai models.
+
+Ordinary-model timers remain research-only. This adapter is tested offline;
+no live HA deployment, mixed-model hardware test or relay action was performed
+as part of this release. Existing entity unique IDs and entry data are unchanged.
+
 ## 0.4.0
 
 - Package as a HACS custom repository and separate manual-install ZIP.

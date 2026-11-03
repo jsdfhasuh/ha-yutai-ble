@@ -5,6 +5,7 @@ from homeassistant.const import UnitOfElectricCurrent, UnitOfElectricPotential, 
 from homeassistant.helpers.entity import EntityCategory
 
 from .entity import YutaiEntity
+from .const import SUPPORTED_MODEL
 
 _METERS = {
     "voltage": (SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 0),
@@ -15,7 +16,8 @@ _METERS = {
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry.runtime_data
-    async_add_entities(YutaiSensor(coordinator, field) for field in _METERS)
+    if coordinator.device_config.model == SUPPORTED_MODEL:
+        async_add_entities(YutaiSensor(coordinator, field) for field in _METERS)
     async_add_entities(YutaiDiagnostic(coordinator, field) for field in
                        ("connection_status", "last_success", "consecutive_failures"))
 

@@ -27,7 +27,7 @@ class PackageTests(unittest.TestCase):
     def test_manifest_hacs_and_component_allowlist(self):
         component = ROOT / builder.COMPONENT
         manifest = json.loads((component / "manifest.json").read_text())
-        self.assertEqual(manifest["version"], "0.4.0")
+        self.assertEqual(manifest["version"], "0.5.0")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["codeowners"], ["@jsdfhasuh"])
         self.assertEqual(manifest["dependencies"], ["bluetooth"])
@@ -76,6 +76,8 @@ class PackageTests(unittest.TestCase):
     def test_copy_helper_requires_gatt_key_for_supported_model(self):
         data = {"model": "yutai.plug.fsov8m", "address": "02:00:00:00:00:01", "gatt_ltmk": "ab" * 32}
         self.assertEqual(key_copy.decode_payload(json.dumps(data)), (data["address"], data["model"], data["gatt_ltmk"]))
-        for changes in ({"model": "yutai.plug.fsov7m"}, {"gatt_ltmk": "ab" * 16}, {"address": "invalid"}):
+        ordinary = {**data, "model": "yutai.plug.fsov7m"}
+        self.assertEqual(key_copy.decode_payload(json.dumps(ordinary))[1], ordinary["model"])
+        for changes in ({"model": "wiing.plug.v7icm"}, {"gatt_ltmk": "ab" * 16}, {"address": "invalid"}):
             with self.assertRaises(ValueError):
                 key_copy.decode_payload(json.dumps({**data, **changes}))

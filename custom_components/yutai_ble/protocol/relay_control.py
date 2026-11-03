@@ -53,9 +53,10 @@ def snapshot_values(items, expected):
     return values
 
 
-def make_relay_client(upstream, value):
+def make_relay_client(upstream, value, *, codec_module=None):
+    selected_codec = codec if codec_module is None else codec_module
     value = relay_value(value)
-    plan = scan.fixed_properties(codec.READ_PROPERTIES)
+    plan = scan.fixed_properties(selected_codec.READ_PROPERTIES)
     if len(plan) != len(READ_SCOPE) or frozenset(plan) != READ_SCOPE:
         read.fail("relay_read_scope_invalid")
     batch_count = (len(plan) + scan.MAX_BATCH - 1) // scan.MAX_BATCH
@@ -198,7 +199,7 @@ def make_relay_client(upstream, value):
                 if not unchanged:
                     # Concurrent setting changes are not attributed or restored.
                     read.fail("relay_settings_changed")
-                settings, capabilities = codec.decode_settings(properties)
+                settings, capabilities = selected_codec.decode_settings(properties)
                 self.completed = True
                 self.stage = "complete"
                 self.result.update(settings=settings, capabilities=capabilities,

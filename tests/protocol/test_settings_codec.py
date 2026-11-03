@@ -137,7 +137,7 @@ class CodecTests(unittest.TestCase):
         self.assertEqual(target.address, payload["address"])
         self.assertIsNone(setting)
         for changes in [{"operation": "relay"}, {"properties": [[2, 1]]},
-                        {"model": "yutai.plug.fsov7m"},
+                        {"model": "wiing.plug.v7icm"},
                         {"operation": "setting", "field": "relay", "value": True}]:
             with self.subTest(changes=changes), self.assertRaises(read.ProbeError):
                 worker.validated_input({**payload, **changes})

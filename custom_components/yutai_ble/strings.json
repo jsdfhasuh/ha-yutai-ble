@@ -3,7 +3,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Yutai Metering Socket",
+        "title": "Yutai Bluetooth Socket",
         "data": {
           "name": "Name",
           "address": "Bluetooth address",

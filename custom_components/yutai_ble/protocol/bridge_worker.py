@@ -11,6 +11,16 @@ import sys
 import read_probe as read
 import settings_codec as codec
 import settings_scan as scan
+from device_identity import ORDINARY_MODEL, SUPPORTED_MODEL
+
+
+def model_codec(model):
+    if model == SUPPORTED_MODEL:
+        return codec
+    if model == ORDINARY_MODEL:
+        import fsov7_codec
+        return fsov7_codec
+    read.fail("target_not_authorized")
 
 
 def validated_input(data):
@@ -25,7 +35,6 @@ def validated_input(data):
     elif operation == "setting":
         if set(data) != required | {"field", "value"}:
             read.fail("input_fields_invalid")
-        codec.validate_setting(data["field"], data["value"])
         setting = (data["field"], data["value"])
     elif operation == "relay":
         if set(data) != required | {"value"} or type(data["value"]) is not bool:
@@ -34,23 +43,26 @@ def validated_input(data):
     else:
         read.fail("operation_not_supported")
     target = read.validated_input({name: data[name] for name in required - {"operation"}})
+    if type(setting) is tuple:
+        model_codec(target.model).validate_setting(*setting)
     return target, setting
 
 
 async def run_request(target, setting):
+    selected_codec = model_codec(target.model)
     relay = type(setting) is bool
     if relay:
         from relay_control import PROPERTY, make_relay_client, perform_relay, snapshot_values
-        factory = lambda upstream: make_relay_client(upstream, setting)
+        factory = lambda upstream: make_relay_client(upstream, setting, codec_module=selected_codec)
         operation = perform_relay
         good_status = "relay_verified"
     elif setting is None:
-        factory = lambda upstream: scan.make_settings_client(upstream, codec.READ_PROPERTIES)
+        factory = lambda upstream: scan.make_settings_client(upstream, selected_codec.READ_PROPERTIES)
         operation = scan.perform_scan
         good_status = "settings_scan_succeeded"
     else:
         from settings_control import make_control_client, perform_control
-        factory = lambda upstream: make_control_client(upstream, *setting)
+        factory = lambda upstream: make_control_client(upstream, *setting, codec_module=selected_codec)
         operation = perform_control
         good_status = "setting_verified"
     result = await read.run_probe(target, client_factory=factory, operation=operation)
@@ -71,7 +83,7 @@ async def run_request(target, setting):
             and result.get("settings_unchanged") is True
         )
         if relay_ok:
-            relay_ok = snapshot_values(result.get("properties"), codec.READ_PROPERTIES)[PROPERTY] is setting
+            relay_ok = snapshot_values(result.get("properties"), selected_codec.READ_PROPERTIES)[PROPERTY] is setting
     else:
         relay_ok = type(relay_writes) is int and relay_writes == 0
     if (result.get("status") == good_status
@@ -82,7 +94,7 @@ async def run_request(target, setting):
             and relay_ok
             and result.get("connected_after_cleanup") is False
             and not result.get("cleanup_error_code")):
-        settings, capabilities = codec.decode_settings(result.get("properties"))
+        settings, capabilities = selected_codec.decode_settings(result.get("properties"))
         result.update(settings=settings, capabilities=capabilities)
         if setting is None:
             result["status"] = "read_verified"

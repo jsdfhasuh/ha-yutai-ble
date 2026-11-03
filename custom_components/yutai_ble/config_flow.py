@@ -20,6 +20,7 @@ from .const import (
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
     SUPPORTED_MODEL,
+    SUPPORTED_MODELS,
 )
 from .models import ValidationError, normalize_report, validate_config, validate_poll_interval
 
@@ -57,7 +58,7 @@ class YutaiConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
                     vol.Required(CONF_ADDRESS): str,
-                    vol.Required(CONF_MODEL, default=SUPPORTED_MODEL): str,
+                    vol.Required(CONF_MODEL, default=SUPPORTED_MODEL): vol.In(SUPPORTED_MODELS),
                     vol.Required(CONF_GATT_LTMK): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                     ),

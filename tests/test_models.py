@@ -57,9 +57,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.address, "02:00:00:00:00:01")
         self.assertNotIn("ab" * 32, repr(config))
         for address, model in [
-            ("02:00:00:00:00:02", "yutai.plug.fsov7m"),
+            ("02:00:00:00:00:02", "yutai.plug.unknown"),
             ("02:00:00:00:00:02", "wiing.plug.v7icm"),
-            ("02:00:00:00:00:01", "yutai.plug.fsov7m"),
+            ("02:00:00:00:00:01", "yutai.plug.unknown"),
         ]:
             with self.subTest(address=address, model=model), self.assertRaises(models.ValidationError):
                 models.validate_config({**data, "address": address, "model": model})

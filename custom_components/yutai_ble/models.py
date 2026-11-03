@@ -13,7 +13,8 @@ from .const import (
     FIELD_KINDS,
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
-    SELECT_OPTIONS,
+    MODEL_FIELDS,
+    MODEL_SELECT_OPTIONS,
     SUPPORTED_MODEL,
 )
 from .protocol.device_identity import validate_identity
@@ -84,12 +85,12 @@ def validate_poll_interval(value: Any) -> int:
     return value
 
 
-def _capabilities(data: Any) -> dict[str, Capability]:
+def _capabilities(data: Any, model: str) -> dict[str, Capability]:
     if not isinstance(data, dict):
         raise ValidationError("invalid_capabilities")
     result = {}
     for name, description in data.items():
-        if name not in FIELD_KINDS or not isinstance(description, dict):
+        if name not in MODEL_FIELDS[model] or not isinstance(description, dict):
             raise ValidationError("invalid_capabilities")
         kind = FIELD_KINDS[name]
         if description.get("kind") != kind:
@@ -99,7 +100,7 @@ def _capabilities(data: Any) -> dict[str, Capability]:
             if (
                 not isinstance(options, list)
                 or not options
-                or any(type(option) is not str or option not in SELECT_OPTIONS[name] for option in options)
+                or any(type(option) is not str or option not in MODEL_SELECT_OPTIONS[model][name] for option in options)
                 or len(set(options)) != len(options)
             ):
                 raise ValidationError("invalid_capabilities")
@@ -230,7 +231,7 @@ def normalize_report(
             or report.get("settings_unchanged") is not True
         ):
             raise ValidationError("unverified_relay")
-    capabilities = _capabilities(report.get("capabilities"))
+    capabilities = _capabilities(report.get("capabilities"), config.model)
     incoming_settings = report.get("settings")
     if not isinstance(incoming_settings, dict):
         raise ValidationError("invalid_report")
@@ -267,9 +268,9 @@ def normalize_report(
     for identity in duplicates:
         by_id.pop(identity)
     measurements = {
-        "voltage": _property_value(by_id.get((4, 3))),
-        "current": _property_value(by_id.get((4, 4))),
-        "power": _property_value(by_id.get((4, 2))),
+        "voltage": _property_value(by_id.get((4, 3))) if config.model == SUPPORTED_MODEL else None,
+        "current": _property_value(by_id.get((4, 4))) if config.model == SUPPORTED_MODEL else None,
+        "power": _property_value(by_id.get((4, 2))) if config.model == SUPPORTED_MODEL else None,
         "relay_output": _property_value(by_id.get((2, 1)), boolean=True),
     }
     if measurements["current"] is not None:

@@ -14,7 +14,9 @@ def load_worker():
     worker_path = Path(__file__).resolve().parents[1] / "custom_components" / "yutai_ble" / "protocol" / "bridge_worker.py"
     spec = importlib.util.spec_from_file_location("yutai_worker_signal_test", worker_path)
     module = importlib.util.module_from_spec(spec)
-    dependencies = {name: types.ModuleType(name) for name in ("read_probe", "settings_codec", "settings_scan")}
+    dependencies = {name: types.ModuleType(name) for name in ("read_probe", "settings_codec", "settings_scan", "device_identity")}
+    dependencies["device_identity"].ORDINARY_MODEL = "yutai.plug.fsov7m"
+    dependencies["device_identity"].SUPPORTED_MODEL = "yutai.plug.fsov8m"
     with patch.dict(sys.modules, dependencies):
         spec.loader.exec_module(module)
     return module

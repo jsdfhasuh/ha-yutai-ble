@@ -79,19 +79,20 @@ def validate_snapshot_items(items):
             uint32(item.get("value"))
 
 
-def make_control_client(upstream, field, value):
-    property_id, mask = codec.validate_setting(field, value)
+def make_control_client(upstream, field, value, *, codec_module=None):
+    selected_codec = codec if codec_module is None else codec_module
+    property_id, mask = selected_codec.validate_setting(field, value)
     property_id = write_property(property_id)
     if uint32(mask) == 0:
         read.fail("setting_change_mask_invalid")
-    plan = scan.fixed_properties(codec.READ_PROPERTIES)
+    plan = scan.fixed_properties(selected_codec.READ_PROPERTIES)
     if len(plan) != len(READ_SCOPE) or frozenset(plan) != READ_SCOPE:
         read.fail("setting_read_scope_invalid")
     batch_count = (len(plan) + scan.MAX_BATCH - 1) // scan.MAX_BATCH
     ReadClient = read.make_client_class(upstream)
 
     def target_for(initial):
-        target = uint32(codec.target_word(field, value, uint32(initial)))
+        target = uint32(selected_codec.target_word(field, value, uint32(initial)))
         if (initial ^ target) & ~mask:
             read.fail("setting_non_target_bits_changed")
         return target
@@ -244,7 +245,7 @@ def make_control_client(upstream, field, value):
                     read.fail("setting_relay_state_changed")
                 if observed != self.target:
                     read.fail("setting_readback_mismatch")
-                settings, capabilities = codec.decode_settings(properties)
+                settings, capabilities = selected_codec.decode_settings(properties)
                 if (not isinstance(settings, dict) or not isinstance(capabilities, dict)
                         or field not in settings or type(settings[field]) is not type(value)
                         or settings[field] != value or field not in capabilities):
