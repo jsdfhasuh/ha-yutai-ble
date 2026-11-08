@@ -11,7 +11,7 @@ COMPONENT = "custom_components/yutai_ble"
 COMPONENT_FILES = (
     "__init__.py", "binary_sensor.py", "bridge.py", "config_flow.py", "const.py",
     "coordinator.py", "entity.py", "manifest.json", "models.py", "number.py",
-    "select.py", "sensor.py", "strings.json", "switch.py", "time.py",
+    "select.py", "sensor.py", "strings.json", "switch.py", "time.py", "request_queue.py",
     "translations/en.json", "translations/zh-Hans.json",
     "protocol/bridge_worker.py", "protocol/device_identity.py", "protocol/fsov7_codec.py", "protocol/read_probe.py",
     "protocol/relay_control.py", "protocol/settings_codec.py", "protocol/settings_control.py",

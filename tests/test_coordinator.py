@@ -233,7 +233,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
             await task
         self.coordinator.bridge.setting.assert_awaited_once()
         self.assertFalse(self.coordinator.last_update_success)
-        self.assertEqual(self.coordinator.last_error_code, "request_cancelled")
+        self.assertEqual(self.coordinator.last_error_code, "write_result_uncertain")
         self.assertIs(self.coordinator.data, self.original)
 
     async def test_repeated_shutdown_cancellation_still_finishes_drain(self):

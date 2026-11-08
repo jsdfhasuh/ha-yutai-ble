@@ -6,12 +6,14 @@ import asyncio
 import json
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from .models import DeviceConfig
+from .request_queue import RequestQueue
 
-_LOCK = asyncio.Lock()
+_LOCK = RequestQueue()
 _NEXT_REQUEST_AT = 0.0
 _MAX_REPORT_BYTES = 1024 * 1024
 _CONNECT_RETRY_WINDOW = 30
@@ -50,6 +52,36 @@ class BridgeError(Exception):
         self.retryable = retryable
         self.may_have_written = may_have_written
         super().__init__(self.code)
+
+
+class ReadDeferred(Exception):
+    """A not-yet-started read yields to a manual request, without a failure."""
+
+
+async def _read_pause(delay: float, interrupt: asyncio.Event | None) -> None:
+    if interrupt is None:
+        await asyncio.sleep(delay)
+        return
+    try:
+        await asyncio.wait_for(interrupt.wait(), timeout=delay)
+    except TimeoutError:
+        return
+    raise ReadDeferred
+
+
+@asynccontextmanager
+async def _request_slot(writing: bool, interrupt: asyncio.Event | None):
+    while True:
+        async with _LOCK.hold(manual=writing):
+            if not writing and interrupt is not None and interrupt.is_set():
+                raise ReadDeferred
+            while (delay := _NEXT_REQUEST_AT - time.monotonic()) > 0:
+                await _read_pause(delay, interrupt if not writing else None)
+            # A manual request on another entry may have arrived during cooldown.
+            if not writing and _LOCK.manual_waiting:
+                continue
+            yield
+            return
 
 
 def _worker_error(report: dict[str, Any], config: DeviceConfig, *, setting: bool, relay: bool = False) -> BridgeError:
@@ -111,18 +143,20 @@ class BridgeClient:
         self._inflight.add(task)
         return task
 
-    async def read(self, config: DeviceConfig) -> dict[str, Any]:
+    async def read(self, config: DeviceConfig, *, interrupt: asyncio.Event | None = None) -> dict[str, Any]:
         task = self._begin_request()
         try:
             for attempt in range(2):
                 try:
-                    return await self._request(config, {"operation": "read"})
+                    return await self._request(config, {"operation": "read"}, interrupt=interrupt)
                 except BridgeError as error:
                     if attempt or not error.retryable:
                         raise
+                    if interrupt is not None and interrupt.is_set():
+                        raise ReadDeferred from None
                     deadline = time.monotonic() + 5
                     while (delay := deadline - time.monotonic()) > 0:
-                        await asyncio.sleep(delay)
+                        await _read_pause(delay, interrupt)
         finally:
             self._inflight.discard(task)
 
@@ -153,15 +187,14 @@ class BridgeClient:
 
         await async_finish_cleanup(asyncio.create_task(drain()))
 
-    async def _request(self, config: DeviceConfig, command: dict[str, Any]) -> dict[str, Any]:
+    async def _request(self, config: DeviceConfig, command: dict[str, Any], *,
+                       interrupt: asyncio.Event | None = None) -> dict[str, Any]:
         global _NEXT_REQUEST_AT
         payload = {**config.worker_payload(), **command}
         setting = command["operation"] == "setting"
         relay = command["operation"] == "relay"
         writing = setting or relay
-        async with _LOCK:
-            while (delay := _NEXT_REQUEST_AT - time.monotonic()) > 0:
-                await asyncio.sleep(delay)
+        async with _request_slot(writing, interrupt):
             process = None
             attempt_started = time.monotonic()
             try:

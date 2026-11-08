@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.0
+
+- Prioritize manual requests over queued polls, both per entry and across entries.
+  Preserve FIFO order between manual commands; never interrupt active BLE work.
+- Yield a background read's connect-retry wait or pre-connect cooldown when a
+  manual command is pending. Keep read retry bounds and disconnect cooldowns.
+- Reuse a newer verified full snapshot for an overlapping queued refresh or
+  pending recovery, avoiding another connection for the same readback.
+- Coalesce consecutive identical overlapping manual commands only after the
+  preceding command has succeeded. Preserve ON/OFF/ON and later explicit requests.
+- Keep uncertain writes unavailable, never automatically resend writes, and
+  drain cancelled workers before releasing the shared connection gate.
+
+Scheduling changes are validated offline only. Each remaining transaction still
+connects, authenticates, reads back and disconnects; no persistent BLE session
+or cryptographic-session reuse is introduced. Live latency is not yet measured.
+
 ## 0.5.0
 
 - Add ordinary Yutai `yutai.plug.fsov7m` to the HA configuration flow.

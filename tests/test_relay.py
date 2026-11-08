@@ -87,7 +87,7 @@ class RelayModelTests(unittest.TestCase):
 
 class RelayBridgeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        bridge._LOCK = asyncio.Lock()
+        bridge._LOCK = bridge.RequestQueue()
         bridge._NEXT_REQUEST_AT = 0
         self.config = models.validate_config(config_data())
 

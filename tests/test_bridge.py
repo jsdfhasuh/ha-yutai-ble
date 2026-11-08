@@ -65,7 +65,7 @@ class FakeProcess:
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        bridge._LOCK = asyncio.Lock()
+        bridge._LOCK = bridge.RequestQueue()
         bridge._NEXT_REQUEST_AT = 0
         self.config = models.DeviceConfig("02:00:00:00:00:01", const.SUPPORTED_MODEL, "ab" * 32)
 

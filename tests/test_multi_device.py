@@ -30,8 +30,10 @@ class MultiDeviceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.second.update_interval.total_seconds(), 120)
         self.assertEqual(self.first.data.measurements["power"], 7)
         self.assertIsNone(self.second.data)
-        self.first.bridge.read.assert_awaited_once_with(self.first.device_config)
-        self.second.bridge.read.assert_awaited_once_with(self.second.device_config)
+        self.first.bridge.read.assert_awaited_once_with(
+            self.first.device_config, interrupt=self.first._manual_requested)
+        self.second.bridge.read.assert_awaited_once_with(
+            self.second.device_config, interrupt=self.second._manual_requested)
         self.second.bridge.read.return_value = {**report(), "address": self.second.device_config.address}
         await self.second.async_request_refresh()
         self.assertEqual(self.second.consecutive_failures, 0)
