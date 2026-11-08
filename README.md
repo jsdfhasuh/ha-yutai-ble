@@ -134,5 +134,12 @@ python -B tools/build_release.py
 最后一条生成组件包、独立扫码包及 SHA256 校验文件。仅打包明确列出的文件，
 不会打包本地私钥、测试结果、缓存或个人部署脚本。
 
+CI 另设两项环境验证：在 Home Assistant 2026.10.4 的真实协调器中检查失败诊断通知，
+以及在 Windows 的 `cmd.exe` 中检查扫码工具的依赖安装恢复。它们分别使用
+`python -B -m unittest discover -s tests/ha -v` 和
+`python -B -m unittest discover -s tests/windows -v`，与上述模拟测试分开运行。
+HA 框架测试需要在独立环境安装该版本 Home Assistant（Python 3.14.2+）；
+这些检查仍不会连接蓝牙、登录小米云或操作实际插座。
+
 [更新记录](CHANGELOG.md) · [安装与维护](docs/INSTALL.md) ·
 [第三方许可](THIRD_PARTY_NOTICES.md) · [MIT License](LICENSE)

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import DeviceConfig
-from .request_queue import RequestQueue
+from .request_queue import RequestInterrupted, RequestQueue
 
 _LOCK = RequestQueue()
 _NEXT_REQUEST_AT = 0.0
@@ -71,17 +71,20 @@ async def _read_pause(delay: float, interrupt: asyncio.Event | None) -> None:
 
 @asynccontextmanager
 async def _request_slot(writing: bool, interrupt: asyncio.Event | None):
-    while True:
-        async with _LOCK.hold(manual=writing):
-            if not writing and interrupt is not None and interrupt.is_set():
-                raise ReadDeferred
-            while (delay := _NEXT_REQUEST_AT - time.monotonic()) > 0:
-                await _read_pause(delay, interrupt if not writing else None)
-            # A manual request on another entry may have arrived during cooldown.
-            if not writing and _LOCK.manual_waiting:
-                continue
-            yield
-            return
+    try:
+        while True:
+            async with _LOCK.hold(manual=writing, interrupt=interrupt if not writing else None):
+                if not writing and interrupt is not None and interrupt.is_set():
+                    raise ReadDeferred
+                while (delay := _NEXT_REQUEST_AT - time.monotonic()) > 0:
+                    await _read_pause(delay, interrupt if not writing else None)
+                # A manual request on another entry may have arrived during cooldown.
+                if not writing and _LOCK.manual_waiting:
+                    continue
+                yield
+                return
+    except RequestInterrupted:
+        raise ReadDeferred from None
 
 
 def _worker_error(report: dict[str, Any], config: DeviceConfig, *, setting: bool, relay: bool = False) -> BridgeError:

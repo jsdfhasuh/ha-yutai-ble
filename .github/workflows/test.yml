@@ -1,4 +1,4 @@
-name: Offline tests and packages
+name: Tests and packages
 on:
   push:
   pull_request:
@@ -32,3 +32,29 @@ jobs:
         with:
           name: yutai-ble-python-${{ matrix.python-version }}
           path: dist/*
+
+  home_assistant:
+    name: Home Assistant framework
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install tested Home Assistant version
+        run: python -m pip install homeassistant==2026.10.4
+      - name: Real coordinator and entity diagnostics (no BLE)
+        run: python -B -m unittest discover -s tests/ha -v
+
+  windows_auth:
+    name: Windows authentication launcher
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Launcher recovery with real cmd.exe (no cloud login)
+        run: python -B -m unittest discover -s tests/windows -v

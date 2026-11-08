@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Let a background read yield while waiting for the global connection queue,
+  so a manual command is not trapped behind its device's queued poll.
+  Preserve FIFO order, disconnect cooldowns and active transactions.
+- Publish diagnostics after consecutive read or command failures, including
+  the first failed poll after a failed command, without marking the device available.
+- Check the Windows helper's dependencies before launching; retry setup when
+  a previous dependency installation failed after creating the virtual environment.
+- Add regressions for nested queues and repeated failures, plus CI checks using
+  Home Assistant 2026.10.4 and the actual Windows command interpreter.
+
 ## 0.6.0
 
 - Prioritize manual requests over queued polls, both per entry and across entries.
