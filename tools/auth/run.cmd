@@ -2,7 +2,10 @@
 setlocal
 cd /d "%~dp0"
 set PYTHONUTF8=1
-if exist ".venv\Scripts\python.exe" goto run
+if not exist ".venv\Scripts\python.exe" goto setup
+".venv\Scripts\python.exe" -c "import aiohttp; from aiohttp import web" >nul 2>nul
+if not errorlevel 1 goto run
+:setup
 call setup.cmd
 if errorlevel 1 (
   echo Setup failed.

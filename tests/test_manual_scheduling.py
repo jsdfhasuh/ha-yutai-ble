@@ -33,6 +33,59 @@ class SchedulingTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.coordinator.async_shutdown()
 
+    async def test_manual_bypasses_other_reads_when_own_read_waits_for_global_gate(self):
+        other_data = {**config_data(), "address": "02:00:00:00:00:02"}
+        other = coordinator_module.YutaiCoordinator(None, SimpleNamespace(data=other_data, options={}))
+        self.coordinator.bridge.cooldown = other.bridge.cooldown = 0
+        order = []
+        manual_entered_bridge = asyncio.Event()
+        relay = self.coordinator.bridge.relay
+
+        async def manual_relay(*args):
+            manual_entered_bridge.set()
+            return await relay(*args)
+
+        self.coordinator.bridge.relay = AsyncMock(side_effect=manual_relay)
+
+        class RecordingProcess(FakeProcess):
+            async def communicate(self, payload):
+                command = json.loads(payload)
+                device = "B" if command["address"] == other_data["address"] else "C"
+                order.append((device, command["operation"]))
+                result = report() if command["operation"] == "read" else relay_report()
+                result["address"] = command["address"]
+                self.stdout = json.dumps(result).encode()
+                return await super().communicate(payload)
+
+        launch = AsyncMock(side_effect=lambda *_args, **_kwargs: RecordingProcess())
+        tasks = []
+        try:
+            with patch.object(bridge.asyncio, "create_subprocess_exec", launch):
+                # Device A owns the global gate; B's read is queued before C's.
+                async with bridge._LOCK.hold():
+                    tasks.append(asyncio.create_task(other.async_request_refresh()))
+                    await asyncio.sleep(0)
+                    tasks.append(asyncio.create_task(self.coordinator.async_request_refresh()))
+                    await asyncio.sleep(0)
+                    tasks.append(asyncio.create_task(self.coordinator.async_set_relay(True)))
+                    # C must release its local gate before A finishes, so its
+                    # manual command can enter the global queue at high priority.
+                    try:
+                        await asyncio.wait_for(manual_entered_bridge.wait(), 0.5)
+                    except TimeoutError:
+                        pass
+                    launch.assert_not_awaited()
+                await asyncio.wait_for(asyncio.gather(*tasks), 1)
+            self.assertEqual(order, [("C", "relay"), ("B", "read")])
+            self.assertEqual(launch.await_count, 2)
+            self.coordinator.bridge.relay.assert_awaited_once()
+            self.assertIs(self.coordinator.data.measurements["relay_output"], True)
+            self.assertEqual(self.coordinator.consecutive_failures, 0)
+            self.assertIsNone(bridge._LOCK._owner)
+            self.assertEqual(bridge._LOCK._waiting, [])
+        finally:
+            await other.async_shutdown()
+
     async def test_queued_read_uses_write_readback_and_manual_fifo_wins(self):
         started, release = asyncio.Event(), asyncio.Event()
         order = []
@@ -262,6 +315,52 @@ class BridgeSchedulingTests(unittest.IsolatedAsyncioTestCase):
         bridge._LOCK = bridge.RequestQueue()
         bridge._NEXT_REQUEST_AT = 0
         self.config = models.validate_config(config_data())
+
+    async def test_read_waiting_for_global_gate_is_deferred_without_spawning(self):
+        interrupt = asyncio.Event()
+        client = bridge.BridgeClient(cooldown=0)
+        launch = AsyncMock()
+        with patch.object(bridge.asyncio, "create_subprocess_exec", launch):
+            async with bridge._LOCK.hold():
+                owner = bridge._LOCK._owner
+                read = asyncio.create_task(client.read(self.config, interrupt=interrupt))
+                await asyncio.sleep(0)
+                interrupt.set()
+                with self.assertRaises(bridge.ReadDeferred):
+                    await asyncio.wait_for(read, 0.5)
+                self.assertIs(bridge._LOCK._owner, owner)
+                self.assertEqual(bridge._LOCK._waiting, [])
+        launch.assert_not_awaited()
+        self.assertEqual(client._inflight, set())
+        self.assertIsNone(bridge._LOCK._owner)
+
+    async def test_deferred_global_read_preserves_cooldown_for_manual_command(self):
+        import time
+
+        interrupt = asyncio.Event()
+        client = bridge.BridgeClient(cooldown=0)
+        deadline = time.monotonic() + 0.03
+        bridge._NEXT_REQUEST_AT = deadline
+        starts = []
+        process = FakeProcess()
+
+        async def launch(*_args, **_kwargs):
+            starts.append(time.monotonic())
+            return process
+
+        with patch.object(bridge.asyncio, "create_subprocess_exec", launch):
+            async with bridge._LOCK.hold():
+                read = asyncio.create_task(client.read(self.config, interrupt=interrupt))
+                await asyncio.sleep(0)
+                interrupt.set()
+                with self.assertRaises(bridge.ReadDeferred):
+                    await asyncio.wait_for(read, 0.5)
+                self.assertEqual(starts, [])
+                self.assertEqual(bridge._NEXT_REQUEST_AT, deadline)
+            await client.relay(self.config, True)
+        self.assertEqual(len(starts), 1)
+        self.assertGreaterEqual(starts[0], deadline)
+        self.assertEqual(json.loads(process.inputs[0])["operation"], "relay")
 
     async def test_manual_global_priority_across_devices(self):
         order = []

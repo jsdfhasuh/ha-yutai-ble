@@ -74,6 +74,14 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
                           self._base_interval * 2 ** min(self.consecutive_failures, 10))
             self.update_interval = timedelta(seconds=seconds)
 
+    def _publish_update_error(self, error: UpdateFailed) -> None:
+        # HA only notifies on the transition to failure. Diagnostics can change
+        # on later failures too, while the verified device data stays unavailable.
+        already_failed = not self.last_update_success
+        self.async_set_update_error(error)
+        if already_failed:
+            self.async_update_listeners()
+
     def _schedule_recovery(self):
         if not self._closing and (self._recovery_task is None or self._recovery_task.done()):
             self._recovery_task = asyncio.create_task(self._async_recover(self._snapshot_revision))
@@ -116,6 +124,7 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
             task = self._begin_request()
         except BridgeError:
             raise UpdateFailed("Yutai BLE entry is closing") from None
+        refresh_started_failed = not self.last_update_success
         revision = self._snapshot_revision
         reading = False
         try:
@@ -135,13 +144,18 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
                     except (BridgeError, ValidationError) as error:
                         self._record_failure(error.code if isinstance(error, BridgeError) else "validation_failed",
                                              refresh=True)
-                        raise UpdateFailed("Yutai BLE read could not be verified") from None
+                        failure = UpdateFailed("Yutai BLE read could not be verified")
+                        # Match HA's state at refresh start, before a queued
+                        # manual request can change it. HA publishes first failures.
+                        if refresh_started_failed:
+                            self._publish_update_error(failure)
+                        raise failure from None
                     self._record_success(snapshot)
                     return snapshot
         except asyncio.CancelledError:
             if reading:
                 self._record_failure("request_cancelled")
-                self.async_set_update_error(UpdateFailed("Yutai BLE read was cancelled"))
+                self._publish_update_error(UpdateFailed("Yutai BLE read was cancelled"))
             raise
         finally:
             self._inflight.discard(task)
@@ -178,7 +192,7 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
                     uncertain = not isinstance(error, BridgeError) or error.may_have_written
                     code = "write_result_uncertain" if uncertain else error.code
                     self._record_failure(code)
-                    self.async_set_update_error(UpdateFailed("Yutai BLE setting could not be verified"))
+                    self._publish_update_error(UpdateFailed("Yutai BLE setting could not be verified"))
                     self._schedule_recovery()
                     raise HomeAssistantError("Yutai BLE setting could not be verified") from None
                 self._record_success(snapshot)
@@ -187,7 +201,7 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
         except asyncio.CancelledError:
             if sending:
                 self._record_failure("write_result_uncertain")
-                self.async_set_update_error(UpdateFailed("Yutai BLE setting was cancelled"))
+                self._publish_update_error(UpdateFailed("Yutai BLE setting was cancelled"))
                 self._schedule_recovery()
             raise
         finally:
@@ -217,7 +231,7 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
                 except (BridgeError, ValidationError) as error:
                     uncertain = not isinstance(error, BridgeError) or error.may_have_written
                     self._record_failure("write_result_uncertain" if uncertain else error.code)
-                    self.async_set_update_error(UpdateFailed("Yutai BLE output could not be verified"))
+                    self._publish_update_error(UpdateFailed("Yutai BLE output could not be verified"))
                     self._schedule_recovery()
                     raise HomeAssistantError("Yutai BLE output could not be verified; readback will check its state") from None
                 self._record_success(snapshot)
@@ -226,7 +240,7 @@ class YutaiCoordinator(DataUpdateCoordinator[Snapshot]):
         except asyncio.CancelledError:
             if sending:
                 self._record_failure("write_result_uncertain")
-                self.async_set_update_error(UpdateFailed("Yutai BLE output request was cancelled"))
+                self._publish_update_error(UpdateFailed("Yutai BLE output request was cancelled"))
                 self._schedule_recovery()
             raise
         finally:

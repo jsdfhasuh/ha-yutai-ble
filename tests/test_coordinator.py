@@ -36,23 +36,47 @@ class CoordinatorStub:
         self.update_interval = kwargs.get("update_interval")
         self.always_update = kwargs.get("always_update")
         self.shutdown_complete = False
+        self._listeners = []
+
+    def async_add_listener(self, listener):
+        self._listeners.append(listener)
+        return lambda: self._listeners.remove(listener)
+
+    def async_update_listeners(self):
+        for listener in list(self._listeners):
+            listener()
 
     def async_set_updated_data(self, value):
         self.data = value
         self.last_update_success = True
         self.published.append(value)
+        self.async_update_listeners()
 
     def async_set_update_error(self, error):
         self.error = error
-        self.last_update_success = False
+        if self.last_update_success:
+            self.last_update_success = False
+            self.async_update_listeners()
 
     async def async_request_refresh(self):
+        previous_success = self.last_update_success
+        previous_data = self.data
         try:
             result = await self._async_update_data()
         except UpdateFailed as error:
-            self.async_set_update_error(error)
+            self.error = error
+            self.last_update_success = False
         else:
-            self.async_set_updated_data(result)
+            self.data = result
+            self.last_update_success = True
+            self.published.append(result)
+        # Match HA: even always_update=True suppresses failure-to-failure
+        # listener updates. Diagnostic tests must exercise that boundary.
+        if not self.last_update_success and not previous_success:
+            return
+        if (self.always_update or previous_success != self.last_update_success
+                or previous_data != self.data):
+            self.async_update_listeners()
 
     async def async_shutdown(self):
         self.shutdown_complete = True

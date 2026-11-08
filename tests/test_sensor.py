@@ -5,9 +5,10 @@ import sys
 import types
 import unittest
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from _load import COMPONENT
 
 
 class EntityStub:
@@ -31,7 +32,7 @@ def load_sensor():
     constants.UnitOfPower = SimpleNamespace(WATT="W")
     stubs["homeassistant.helpers.entity"].EntityCategory = SimpleNamespace(DIAGNOSTIC="diagnostic")
     stubs["custom_components.yutai_ble.entity"].YutaiEntity = EntityStub
-    source = Path(__file__).resolve().parents[1] / "custom_components" / "yutai_ble" / "sensor.py"
+    source = COMPONENT / "sensor.py"
     spec = importlib.util.spec_from_file_location("custom_components.yutai_ble.sensor_test", source)
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, stubs):
