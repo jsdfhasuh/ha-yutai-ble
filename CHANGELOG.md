@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
 
 - Let a background read yield while waiting for the global connection queue,
   so a manual command is not trapped behind its device's queued poll.
@@ -11,6 +11,10 @@
   a previous dependency installation failed after creating the virtual environment.
 - Add regressions for nested queues and repeated failures, plus CI checks using
   Home Assistant 2026.10.4 and the actual Windows command interpreter.
+
+Existing configuration entries and entity unique IDs are unchanged. Update the
+integration files and restart Home Assistant; no new pairing or key scan is needed.
+Radio performance and real-device recovery remain outside this release's validation.
 
 ## 0.6.0
 

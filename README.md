@@ -4,6 +4,11 @@ Home Assistant 自定义集成，通过本地蓝牙控制禹泰普通版和计�
 仓库同时公开普通版和炎米 Y1 的独立协议测试源码，覆盖此前测试过的三款插座。
 它是 **HA 集成（custom integration）**，不是独立 App，也不是 Supervisor 加载项。
 
+**v0.6.1** 修复多设备排队时手动命令被后台轮询阻塞、连续失败时诊断实体不刷新，
+以及 Windows 扫码工具首次依赖安装失败后无法自动恢复的问题。
+已有设备可直接更新并重启 HA，配置和实体 ID 保留，无需重新扫码。
+见 [发布说明](docs/releases/v0.6.1.md) 和 [更新步骤](docs/INSTALL.md#更新和回滚)。
+
 ## 支持范围
 
 | 项目 | 普通版 `yutai.plug.fsov7m` | 计量版 `yutai.plug.fsov8m` |
@@ -61,8 +66,9 @@ Home Assistant 自定义集成，通过本地蓝牙控制禹泰普通版和计�
 4. **重启 Home Assistant**，无需重启路由器或主机。
 5. 按下方“添加插座”完成配置。
 
-后续在 HACS 下载更新，再重启 HA。更新前保留 HA 备份；具体回滚见
-[安装与维护](docs/INSTALL.md)。
+后续在 HACS 中对本仓库执行“更新信息”，再“重新下载”新版本并重启 HA。
+“更新信息”只刷新版本列表，不会安装代码。更新前保留 HA 备份；完整步骤和回滚见
+[安装与维护](docs/INSTALL.md#更新和回滚)。
 
 ## 安装方式二：手动 ZIP（不需要 HACS）
 
@@ -140,6 +146,11 @@ CI 另设两项环境验证：在 Home Assistant 2026.10.4 的真实协调器中
 `python -B -m unittest discover -s tests/windows -v`，与上述模拟测试分开运行。
 HA 框架测试需要在独立环境安装该版本 Home Assistant（Python 3.14.2+）；
 这些检查仍不会连接蓝牙、登录小米云或操作实际插座。
+
+发布时同步组件 `manifest.json`、版本断言和 `CHANGELOG.md`，并添加
+`docs/releases/v版本号.md`。将发布提交的首行写为 `Release v版本号` 后推送到 `main`，
+CI 会在所有测试通过后发布该提交的安装包和校验文件，并设为最新版。
+普通提交、Pull Request 和手动运行测试不会触发正式发布。
 
 [更新记录](CHANGELOG.md) · [安装与维护](docs/INSTALL.md) ·
 [第三方许可](THIRD_PARTY_NOTICES.md) · [MIT License](LICENSE)

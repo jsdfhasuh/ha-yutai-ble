@@ -34,14 +34,48 @@ HA OS 按 HA 官方方式配置本地蓝牙硬件。HA Container 需由宿主机
 
 ## 更新和回滚
 
-1. 先做 HA 备份；手动安装者另外保留当前 `custom_components/yutai_ble` 目录。
-2. HACS 更新或替换该组件目录。不要删除 `.storage`、设备条目或其他集成。
-3. 重启 HA，只检查本集成设备是否加载、计量是否刷新。
-4. 遇到回归，HACS 重新下载之前的版本，或恢复保留的旧组件目录，再重启 HA。
+先做 HA 备份；手动安装者另外保留当前 `custom_components/yutai_ble` 目录。
 
-0.5.0 保留原有地址生成的实体唯一 ID 和配置结构，不需要主动重建已有条目。
+### 通过 HACS 更新
+
+1. 打开 **HACS → Yutai BLE → ⋮ → 更新信息（Update information）**。
+2. 再选 **⋮ → 重新下载（Redownload）**，确认需要安装的版本，例如 `v0.6.1`。
+   需要手动选版本时，展开 **Need a different version?**。
+   如果 **设置 → 更新** 已出现 Yutai BLE 更新，也可以在那里选择 **安装**。
+3. 下载完成后进入 **设置 → 系统 → 右上角电源图标 → 重启 Home Assistant → 重启**。
+
+“更新信息”只刷新版本信息；“重新下载 / 安装”才会写入新代码。
+集成代码更新需要重启 Home Assistant，刷新浏览器或仅重新加载集成不能替代这个步骤。
+参见 [HACS 官方更新说明](https://www.hacs.xyz/docs/use/update/)、
+[仓库操作说明](https://www.hacs.xyz/docs/use/repositories/dashboard/) 和
+[HA 官方重启步骤](https://www.home-assistant.io/common-tasks/general/#restarting-home-assistant)。
+
+如果 HA 界面已经使用 **Marketplace** 管理社区集成，进入
+**设置 → 更新 → Yutai BLE → 安装**，然后重启 HA。
+仓库详情位于 **设置 → Marketplace**；可通过 **⋮ → Install another version** 选择版本。
+参见 [HA 官方 Marketplace 文档](https://www.home-assistant.io/integrations/marketplace/)。
+
+### 手动安装者更新
+
+1. 从 [Releases](https://github.com/jsdfhasuh/ha-yutai-ble/releases) 下载组件包，
+   例如 **`yutai-ble-v0.6.1.zip`**。
+2. 解压后，用包内的 `custom_components/yutai_ble` 替换 HA 配置目录中的同名目录。
+   最终路径应为 `/config/custom_components/yutai_ble/manifest.json`，不要多套一层目录。
+3. 按上面的路径重启 Home Assistant。
+
+保留 `.storage`、已有集成条目和设备。扫码工具包 `yutai-ble-qr-windows-v版本号.zip`
+用于在 Windows 上获取密钥，不是 HA 组件；已有设备无需重新扫码。
+
+### 更新后检查和回滚
+
+重启后确认已安装版本、设备实体正常加载，以及受支持的状态和计量数据继续刷新。
+手动安装者可查看 `custom_components/yutai_ble/manifest.json` 中的 `version`。
+遇到回归可恢复更新前的 HA 备份；HACS 安装者也可重新下载之前的兼容版本，
+手动安装者可恢复保留的旧组件目录，然后再次重启 HA。
+
+0.6.1 保留原有地址生成的实体唯一 ID 和配置结构，不需要主动重建已有条目。
 使用 0.4.0 或更早版本者需先更新组件、重启 HA，才会看到普通版型号选项。
-但本次发布没有自动更新任何现存部署；升级后的实体和自动化仍需核对。
+发布新版本不会自动更新现存部署；升级后的实体和自动化仍需核对。
 
 ## 常见问题
 
