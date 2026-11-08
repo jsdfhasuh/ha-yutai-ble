@@ -1,34 +1,92 @@
 {
-  "title": "\u79b9\u6cf0\u84dd\u7259\u63d2\u5ea7",
+  "title": "禹泰蓝牙插座",
   "config": {
     "step": {
       "user": {
-        "title": "\u79b9\u6cf0\u84dd\u7259\u63d2\u5ea7",
+        "title": "禹泰蓝牙插座",
+        "description": "请按扫码工具显示的地址、型号和密钥填写。提交后会读取插座，验证成功后添加。",
         "data": {
-          "name": "\u540d\u79f0",
-          "address": "\u84dd\u7259\u5730\u5740",
-          "model": "\u578b\u53f7",
-          "gatt_ltmk": "GATT \u957f\u671f\u5bc6\u94a5"
+          "name": "设备名称",
+          "address": "蓝牙地址",
+          "model": "插座型号",
+          "gatt_ltmk": "蓝牙长期密钥（gatt_ltmk）"
+        },
+        "data_description": {
+          "name": "可自由命名（1～80 个字符），例如“客厅插座”。",
+          "address": "复制扫码工具显示的蓝牙 MAC，格式为 XX:XX:XX:XX:XX:XX。",
+          "model": "请按扫码结果选择：fsov8m 为计量版，fsov7m 为普通版。",
+          "gatt_ltmk": "填写扫码工具复制的 64 个十六进制字符（32 字节）密钥。"
         }
       }
     },
     "error": {
-      "invalid_config": "\u8bbe\u5907\u5730\u5740\u3001\u578b\u53f7\u6216\u5bc6\u94a5\u4e0d\u6b63\u786e\u3002",
-      "cannot_connect": "\u672a\u80fd\u9a8c\u8bc1\u672c\u5730\u84dd\u7259\u8bfb\u53d6\u7ed3\u679c\u3002"
+      "invalid_config": "请核对名称、蓝牙 MAC、型号和密钥；密钥须为 64 个十六进制字符。",
+      "cannot_connect": "未能验证插座的蓝牙读取。请确认插座通电并靠近 HA，退出米家控制页或关闭手机蓝牙后重试；同时核对型号和密钥。"
     },
     "abort": {
-      "already_configured": "\u6b64\u63d2\u5ea7\u5df2\u6dfb\u52a0\u3002",
-      "invalid_config": "\u8bbe\u5907\u5730\u5740\u3001\u578b\u53f7\u6216\u5bc6\u94a5\u4e0d\u6b63\u786e\u3002",
-      "cannot_connect": "\u672a\u80fd\u9a8c\u8bc1\u672c\u5730\u84dd\u7259\u8bfb\u53d6\u7ed3\u679c\u3002"
+      "already_configured": "此插座已添加，可在“设置 → 设备与服务”中查看现有设备。",
+      "invalid_config": "请核对名称、蓝牙 MAC、型号和密钥；密钥须为 64 个十六进制字符。",
+      "cannot_connect": "未能验证插座的蓝牙读取。请确认插座通电并靠近 HA，退出米家控制页或关闭手机蓝牙后重试；同时核对型号和密钥。"
     }
   },
   "options": {
-    "step": {"init": {"title": "\u8f6e\u8be2\u8bbe\u7f6e", "data": {"poll_interval": "\u8f6e\u8be2\u95f4\u9694\uff08\u79d2\uff09"}}},
-    "error": {"invalid_interval": "\u8bf7\u8f93\u5165 30 \u81f3 3600 \u4e4b\u95f4\u7684\u6574\u6570\u3002"}
+    "step": {
+      "init": {
+        "title": "轮询设置",
+        "description": "设置自动读取插座状态的间隔。",
+        "data": {
+          "poll_interval": "轮询间隔（秒）"
+        },
+        "data_description": {
+          "poll_interval": "默认 60 秒，范围 30～3600 秒。数值越小，自动刷新越频繁。"
+        }
+      }
+    },
+    "error": {
+      "invalid_interval": "请输入 30～3600 之间的整数（秒），例如 60。"
+    }
+  },
+  "selector": {
+    "model": {
+      "options": {
+        "yutai.plug.fsov8m": "禹泰电工计量版（fsov8m）",
+        "yutai.plug.fsov7m": "禹泰电工普通版（WY-E802 / fsov7m）"
+      }
+    }
   },
   "exceptions": {
     "invalid_countdown_duration": {
-      "message": "\u8bf7\u8f93\u5165 1 \u81f3 59 \u79d2\uff1b\u4e00\u5206\u949f\u8d77\u4ec5\u652f\u6301 60 \u7684\u6574\u6570\u500d\uff0c\u6700\u5927 86340 \u79d2\uff0823 \u5c0f\u65f6 59 \u5206\u949f\uff09\u3002"
+      "message": "请输入 1 至 59 秒；一分钟起仅支持 60 的整数倍，最大 86340 秒（23 小时 59 分钟）。"
+    },
+    "entry_closing": {
+      "message": "禹泰蓝牙集成正在关闭，请稍后再操作。"
+    },
+    "read_unverified": {
+      "message": "无法确认设备读取结果。请检查插座供电和本地蓝牙连接。"
+    },
+    "read_cancelled": {
+      "message": "设备状态读取已取消，请稍后查看通信状态。"
+    },
+    "unsupported_setting": {
+      "message": "此插座不支持该设置或设置值，请选择界面提供的选项。"
+    },
+    "setting_unverified": {
+      "message": "无法确认设置结果；稍后会读取设备状态进行核对。"
+    },
+    "setting_cancelled": {
+      "message": "设置操作已取消；稍后会读取设备状态进行核对。"
+    },
+    "invalid_relay_value": {
+      "message": "开关状态须为开启或关闭。"
+    },
+    "relay_unverified": {
+      "message": "无法确认插座的开关结果；稍后会读取设备状态进行核对。"
+    },
+    "relay_cancelled": {
+      "message": "开关操作已取消；稍后会读取设备状态进行核对。"
+    },
+    "invalid_local_time": {
+      "message": "请选择精确到分钟的本地时间，例如 22:30；不支持秒数或时区信息。"
     }
   },
   "entity": {

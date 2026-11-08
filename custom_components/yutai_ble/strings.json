@@ -4,31 +4,89 @@
     "step": {
       "user": {
         "title": "Yutai Bluetooth Socket",
+        "description": "Enter the address, model and key shown by the QR tool. The socket will be read to verify these details before it is added.",
         "data": {
           "name": "Name",
           "address": "Bluetooth address",
-          "model": "Model",
-          "gatt_ltmk": "GATT long-term key"
+          "model": "Socket model",
+          "gatt_ltmk": "Bluetooth long-term key (gatt_ltmk)"
+        },
+        "data_description": {
+          "name": "Choose a name (1–80 characters), such as Living room socket.",
+          "address": "Copy the Bluetooth MAC from the QR tool, in the format XX:XX:XX:XX:XX:XX.",
+          "model": "Use the model shown by the QR tool: fsov8m is the metering model; fsov7m is the standard model.",
+          "gatt_ltmk": "Paste the key copied by the QR tool: 64 hexadecimal characters (32 bytes)."
         }
       }
     },
     "error": {
-      "invalid_config": "The device identity or key is invalid.",
-      "cannot_connect": "A local Bluetooth read could not be verified."
+      "invalid_config": "Check the name, Bluetooth MAC, model and key. The key must contain 64 hexadecimal characters.",
+      "cannot_connect": "Could not verify a Bluetooth read. Check the socket's power, Bluetooth range, model and key. Close its Mi Home control page or turn off the phone's Bluetooth, then try again."
     },
     "abort": {
-      "already_configured": "This device is already configured.",
-      "invalid_config": "The device identity or key is invalid.",
-      "cannot_connect": "A local Bluetooth read could not be verified."
+      "already_configured": "This socket is already configured. Find it under Settings > Devices & services.",
+      "invalid_config": "Check the name, Bluetooth MAC, model and key. The key must contain 64 hexadecimal characters.",
+      "cannot_connect": "Could not verify a Bluetooth read. Check the socket's power, Bluetooth range, model and key. Close its Mi Home control page or turn off the phone's Bluetooth, then try again."
     }
   },
   "options": {
-    "step": {"init": {"title": "Polling", "data": {"poll_interval": "Polling interval (seconds)"}}},
-    "error": {"invalid_interval": "Enter an integer from 30 to 3600."}
+    "step": {
+      "init": {
+        "title": "Polling",
+        "description": "Set how often the socket state is read automatically.",
+        "data": {
+          "poll_interval": "Polling interval (seconds)"
+        },
+        "data_description": {
+          "poll_interval": "Default: 60 seconds. Range: 30–3600 seconds. Lower values refresh the state more frequently."
+        }
+      }
+    },
+    "error": {
+      "invalid_interval": "Enter an integer from 30 to 3600 seconds, for example 60."
+    }
+  },
+  "selector": {
+    "model": {
+      "options": {
+        "yutai.plug.fsov8m": "Yutai metering model (fsov8m)",
+        "yutai.plug.fsov7m": "Yutai standard model (WY-E802 / fsov7m)"
+      }
+    }
   },
   "exceptions": {
     "invalid_countdown_duration": {
       "message": "Enter 1-59 seconds, or whole minutes from 60 to 86340 seconds (23 h 59 min)."
+    },
+    "entry_closing": {
+      "message": "Yutai BLE entry is closing"
+    },
+    "read_unverified": {
+      "message": "Yutai BLE read could not be verified"
+    },
+    "read_cancelled": {
+      "message": "Yutai BLE read was cancelled"
+    },
+    "unsupported_setting": {
+      "message": "This setting or value is not supported by the Yutai BLE device."
+    },
+    "setting_unverified": {
+      "message": "Yutai BLE setting could not be verified"
+    },
+    "setting_cancelled": {
+      "message": "Yutai BLE setting was cancelled"
+    },
+    "invalid_relay_value": {
+      "message": "Yutai BLE output requires a boolean value"
+    },
+    "relay_unverified": {
+      "message": "Yutai BLE output could not be verified; readback will check its state"
+    },
+    "relay_cancelled": {
+      "message": "Yutai BLE output request was cancelled"
+    },
+    "invalid_local_time": {
+      "message": "Yutai BLE time requires a local whole minute"
     }
   },
   "entity": {

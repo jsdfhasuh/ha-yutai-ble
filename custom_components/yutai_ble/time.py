@@ -6,6 +6,7 @@ from homeassistant.components.time import TimeEntity
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 
+from .const import DOMAIN
 from .entity import YutaiEntity
 
 
@@ -28,5 +29,9 @@ class YutaiTime(YutaiEntity, TimeEntity):
 
     async def async_set_value(self, value: time) -> None:
         if value.second or value.microsecond or value.tzinfo is not None:
-            raise HomeAssistantError("Yutai BLE time requires a local whole minute")
+            raise HomeAssistantError(
+                "Yutai BLE time requires a local whole minute",
+                translation_domain=DOMAIN,
+                translation_key="invalid_local_time",
+            )
         await self.coordinator.async_set_setting(self.field, value.strftime("%H:%M"))

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.2
+
+- Translate model choices in the configuration form while preserving their
+  original protocol values and existing device configuration.
+- Add Chinese field help, actionable configuration errors and polling guidance;
+  keep the English localization available for English-language Home Assistant.
+- Localize user-facing control and setup errors without changing BLE operations,
+  retry behavior or machine-readable diagnostic codes.
+- Document the Chinese model names and every setup field in the README.
+
 ## 0.6.1
 
 - Let a background read yield while waiting for the global connection queue,

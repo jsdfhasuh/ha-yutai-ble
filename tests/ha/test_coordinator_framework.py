@@ -109,8 +109,14 @@ class FrameworkDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                 BridgeError("ble_connect_failed"),
             ):
                 self.coordinator.bridge.relay = AsyncMock(side_effect=error)
-                with self.assertRaises(HomeAssistantError):
+                with self.assertRaises(HomeAssistantError) as caught:
                     await self.coordinator.async_set_relay(True)
+                self.assertEqual(
+                    (caught.exception.translation_domain, caught.exception.translation_key),
+                    ("yutai_ble", "relay_unverified"),
+                )
+                self.assertIsNone(caught.exception.translation_placeholders)
+                self.assertEqual(self.coordinator.last_exception.translation_key, "relay_unverified")
         self.assertEqual(len(self.notifications), 2)
         self.assertEqual(
             [item["last_error"] for item in self.notifications],
@@ -121,6 +127,11 @@ class FrameworkDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
             side_effect=BridgeError("ble_connect_timeout")
         )
         await self.coordinator.async_refresh()
+        self.assertEqual(
+            (self.coordinator.last_exception.translation_domain,
+             self.coordinator.last_exception.translation_key),
+            ("yutai_ble", "read_unverified"),
+        )
         self.assertEqual(len(self.notifications), 3)
         self.assertEqual(self.notifications[-1], {
             "status": "retrying", "failures": 1, "available": False,

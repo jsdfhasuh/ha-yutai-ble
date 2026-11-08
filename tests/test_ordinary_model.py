@@ -50,7 +50,7 @@ class OrdinaryModelTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_form_lists_both_yutai_models_only(self):
         form = await flow_module.YutaiConfigFlow().async_step_user()
-        self.assertEqual(set(form["data_schema"]["model"]), {"yutai.plug.fsov7m", "yutai.plug.fsov8m"})
+        self.assertEqual(set(form["data_schema"]["model"]["options"]), {"yutai.plug.fsov7m", "yutai.plug.fsov8m"})
 
     async def test_sensor_setup_does_not_create_ordinary_meter_entities(self):
         for model, count in (("yutai.plug.fsov7m", 3), ("yutai.plug.fsov8m", 6)):

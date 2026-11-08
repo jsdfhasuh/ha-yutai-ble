@@ -16,10 +16,15 @@ bridge = integration("bridge")
 
 
 class HAError(Exception):
-    pass
+    def __init__(self, *args, translation_domain=None, translation_key=None,
+                 translation_placeholders=None):
+        super().__init__(*args)
+        self.translation_domain = translation_domain
+        self.translation_key = translation_key
+        self.translation_placeholders = translation_placeholders
 
 
-class UpdateFailed(Exception):
+class UpdateFailed(HAError):
     pass
 
 
@@ -127,8 +132,11 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         for response in (bridge.BridgeError("worker_failed"), {**report(), "status": "setting_verified", "verified": True}):
             method = AsyncMock(side_effect=response) if isinstance(response, Exception) else AsyncMock(return_value=response)
             self.coordinator.bridge.setting = method
-            with self.assertRaises(HAError):
+            with self.assertRaises(HAError) as caught:
                 await self.coordinator.async_set_setting("indicator_mode", "follow")
+            self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                             ("yutai_ble", "setting_unverified"))
+            self.assertEqual(self.coordinator.error.translation_key, "setting_unverified")
             self.assertIs(self.coordinator.data, self.original)
             self.assertFalse(self.coordinator.last_update_success)
             self.assertEqual(self.coordinator.published, [])
@@ -136,8 +144,10 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unverified_field_never_reaches_backend(self):
         self.coordinator.bridge.setting = AsyncMock()
-        with self.assertRaises(HAError):
+        with self.assertRaises(HAError) as caught:
             await self.coordinator.async_set_setting("relay_output", True)
+        self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                         ("yutai_ble", "unsupported_setting"))
         self.coordinator.bridge.setting.assert_not_awaited()
 
     async def test_missing_meters_in_write_report_are_not_retained(self):
@@ -152,6 +162,9 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(UpdateFailed) as caught:
             await self.coordinator._async_update_data()
         self.assertNotIn("secret", str(caught.exception))
+        self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                         ("yutai_ble", "read_unverified"))
+        self.assertIsNone(caught.exception.translation_placeholders)
 
     async def test_refresh_failures_back_off_and_verified_success_resets_diagnostics(self):
         self.assertTrue(self.coordinator.always_update)
@@ -237,10 +250,14 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.coordinator._inflight, set())
         self.assertIsNone(self.coordinator._recovery_task)
         self.coordinator.bridge.read.assert_not_awaited()
-        with self.assertRaises(HAError):
+        with self.assertRaises(HAError) as caught:
             await self.coordinator.async_set_setting("indicator_mode", "follow")
-        with self.assertRaises(UpdateFailed):
+        self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                         ("yutai_ble", "entry_closing"))
+        with self.assertRaises(UpdateFailed) as caught:
             await self.coordinator._async_update_data()
+        self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                         ("yutai_ble", "entry_closing"))
 
     async def test_cancelled_write_is_unavailable_and_never_retried(self):
         started = asyncio.Event()
@@ -259,6 +276,28 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.coordinator.last_update_success)
         self.assertEqual(self.coordinator.last_error_code, "write_result_uncertain")
         self.assertIs(self.coordinator.data, self.original)
+        self.assertEqual((self.coordinator.error.translation_domain, self.coordinator.error.translation_key),
+                         ("yutai_ble", "setting_cancelled"))
+
+    async def test_cancelled_read_preserves_cancellation_and_translatable_failure(self):
+        started = asyncio.Event()
+
+        async def blocked(*_args, **_kwargs):
+            started.set()
+            await asyncio.Event().wait()
+
+        self.coordinator.bridge.read = AsyncMock(side_effect=blocked)
+        task = asyncio.create_task(self.coordinator._async_update_data())
+        await started.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.coordinator.bridge.read.assert_awaited_once()
+        self.assertFalse(self.coordinator.last_update_success)
+        self.assertEqual(self.coordinator.last_error_code, "request_cancelled")
+        self.assertIs(self.coordinator.data, self.original)
+        self.assertEqual((self.coordinator.error.translation_domain, self.coordinator.error.translation_key),
+                         ("yutai_ble", "read_cancelled"))
 
     async def test_repeated_shutdown_cancellation_still_finishes_drain(self):
         started, release = asyncio.Event(), asyncio.Event()

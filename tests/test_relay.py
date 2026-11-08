@@ -162,8 +162,12 @@ class RelayCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.coordinator.bridge.relay = AsyncMock(side_effect=bridge.BridgeError("worker_timeout", may_have_written=True))
         self.coordinator.bridge.read = AsyncMock(return_value=report())
         with patch.object(coordinator_module.asyncio, "sleep", AsyncMock()):
-            with self.assertRaises(HAError):
+            with self.assertRaises(HAError) as caught:
                 await self.coordinator.async_set_relay(True)
+            self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                             ("yutai_ble", "relay_unverified"))
+            self.assertIsNone(caught.exception.translation_placeholders)
+            self.assertEqual(self.coordinator.error.translation_key, "relay_unverified")
             self.assertIs(self.coordinator.data, self.original)
             self.assertEqual(self.coordinator.published, [])
             self.assertFalse(self.coordinator.last_update_success)
@@ -175,8 +179,10 @@ class RelayCoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_bool_does_not_dispatch_or_invalidate_state(self):
         self.coordinator.bridge.relay = AsyncMock()
-        with self.assertRaises(HAError):
+        with self.assertRaises(HAError) as caught:
             await self.coordinator.async_set_relay(1)
+        self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                         ("yutai_ble", "invalid_relay_value"))
         self.coordinator.bridge.relay.assert_not_awaited()
         self.assertTrue(self.coordinator.last_update_success)
 
@@ -227,9 +233,13 @@ class RelayCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(self.coordinator.data, self.original)
         self.assertFalse(self.coordinator.last_update_success)
         self.assertEqual(self.coordinator.last_error_code, "write_result_uncertain")
+        self.assertEqual((self.coordinator.error.translation_domain, self.coordinator.error.translation_key),
+                         ("yutai_ble", "relay_cancelled"))
         await self.coordinator.async_shutdown()
-        with self.assertRaises(HAError):
+        with self.assertRaises(HAError) as caught:
             await self.coordinator.async_set_relay(False)
+        self.assertEqual((caught.exception.translation_domain, caught.exception.translation_key),
+                         ("yutai_ble", "entry_closing"))
         self.coordinator.bridge.relay.assert_awaited_once()
 
 

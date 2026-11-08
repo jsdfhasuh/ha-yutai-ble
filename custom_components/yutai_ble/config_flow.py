@@ -58,7 +58,13 @@ class YutaiConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
                     vol.Required(CONF_ADDRESS): str,
-                    vol.Required(CONF_MODEL, default=SUPPORTED_MODEL): vol.In(SUPPORTED_MODELS),
+                    vol.Required(CONF_MODEL, default=SUPPORTED_MODEL): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=list(SUPPORTED_MODELS),
+                            translation_key="model",
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    ),
                     vol.Required(CONF_GATT_LTMK): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                     ),

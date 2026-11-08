@@ -39,7 +39,7 @@ HA OS 按 HA 官方方式配置本地蓝牙硬件。HA Container 需由宿主机
 ### 通过 HACS 更新
 
 1. 打开 **HACS → Yutai BLE → ⋮ → 更新信息（Update information）**。
-2. 再选 **⋮ → 重新下载（Redownload）**，确认需要安装的版本，例如 `v0.6.1`。
+2. 再选 **⋮ → 重新下载（Redownload）**，确认需要安装的版本，例如 `v0.6.2`。
    需要手动选版本时，展开 **Need a different version?**。
    如果 **设置 → 更新** 已出现 Yutai BLE 更新，也可以在那里选择 **安装**。
 3. 下载完成后进入 **设置 → 系统 → 右上角电源图标 → 重启 Home Assistant → 重启**。
@@ -58,7 +58,7 @@ HA OS 按 HA 官方方式配置本地蓝牙硬件。HA Container 需由宿主机
 ### 手动安装者更新
 
 1. 从 [Releases](https://github.com/jsdfhasuh/ha-yutai-ble/releases) 下载组件包，
-   例如 **`yutai-ble-v0.6.1.zip`**。
+   例如 **`yutai-ble-v0.6.2.zip`**。
 2. 解压后，用包内的 `custom_components/yutai_ble` 替换 HA 配置目录中的同名目录。
    最终路径应为 `/config/custom_components/yutai_ble/manifest.json`，不要多套一层目录。
 3. 按上面的路径重启 Home Assistant。
@@ -73,11 +73,15 @@ HA OS 按 HA 官方方式配置本地蓝牙硬件。HA Container 需由宿主机
 遇到回归可恢复更新前的 HA 备份；HACS 安装者也可重新下载之前的兼容版本，
 手动安装者可恢复保留的旧组件目录，然后再次重启 HA。
 
-0.6.1 保留原有地址生成的实体唯一 ID 和配置结构，不需要主动重建已有条目。
+0.6.2 保留原有地址生成的实体唯一 ID 和配置结构，不需要主动重建已有条目。
 使用 0.4.0 或更早版本者需先更新组件、重启 HA，才会看到普通版型号选项。
 发布新版本不会自动更新现存部署；升级后的实体和自动化仍需核对。
 
 ## 常见问题
+
+**型号中文名是什么、添加字段怎么填：** 计量版是 `yutai.plug.fsov8m`，普通版是
+`yutai.plug.fsov7m`（WY-E802）。0.6.2 的简体中文页面会显示对应的中文型号名称，
+各字段填写示例见 [README：添加页面怎么填写](../README.md#添加页面怎么填写)。
 
 **找不到集成：** 确认路径是 `custom_components/yutai_ble/manifest.json`，安装后重启 HA。
 在浏览器刷新页面；HACS 下载成功不等于已添加设备。
