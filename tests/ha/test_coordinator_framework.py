@@ -100,6 +100,8 @@ class FrameworkDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.notifications[-1], {
             "status": "verified", "failures": 0, "available": True,
             "last_error": None, "poll_interval_seconds": 60,
+            "last_error_phase": None, "last_protocol_error": None,
+            "session_idle_timeout_seconds": 0, "last_relay_verified_at": None,
         })
 
     async def test_failed_commands_and_first_failed_poll_publish_changed_diagnostics(self):
@@ -136,6 +138,9 @@ class FrameworkDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.notifications[-1], {
             "status": "retrying", "failures": 1, "available": False,
             "last_error": "ble_connect_timeout", "poll_interval_seconds": 120,
+            "last_error_phase": "unknown", "last_protocol_error": "unknown",
+            "session_idle_timeout_seconds": 0, "last_relay_verified_at": None,
+            "phase_timings_seconds": {},
         })
         self.assertFalse(self.coordinator.last_update_success)
         self.assertEqual(self.coordinator.last_success_at, self.last_success)
