@@ -35,15 +35,18 @@
         "title": "轮询设置",
         "description": "设置自动读取插座状态的间隔。",
         "data": {
-          "poll_interval": "轮询间隔（秒）"
+          "poll_interval": "轮询间隔（秒）",
+          "session_idle_timeout": "保留已鉴权连接（秒）"
         },
         "data_description": {
-          "poll_interval": "默认 60 秒，范围 30～3600 秒。数值越小，自动刷新越频繁。"
+          "poll_interval": "默认 60 秒，范围 30～3600 秒。数值越小，自动刷新越频繁。",
+          "session_idle_timeout": "仅计量版支持。0 为关闭复用，1～120 为连接空闲保留时间。90 秒可覆盖 60 秒轮询；连接期间可能占用米家蓝牙直连。连接使用满 300 秒或 64 次请求后会重新鉴权。"
         }
       }
     },
     "error": {
-      "invalid_interval": "请输入 30～3600 之间的整数（秒），例如 60。"
+      "invalid_interval": "请输入 30～3600 之间的整数（秒），例如 60。",
+      "invalid_session_timeout": "请输入 0～120 之间的整数（秒）。"
     }
   },
   "selector": {

@@ -47,6 +47,9 @@ def load_flow():
     vol.Schema = lambda value: value
     vol.Required = lambda key, **kwargs: key
     vol.In = lambda choices: tuple(choices)
+    vol.All = lambda *values: values
+    vol.Coerce = lambda kind: kind
+    vol.Range = lambda **kwargs: kwargs
     entries = stubs["homeassistant.config_entries"]
     entries.ConfigEntry = entries.ConfigFlowResult = object
     entries.ConfigFlow = entries.OptionsFlow = FlowStub
@@ -70,6 +73,23 @@ flow_module = load_flow()
 
 
 class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_session_options_are_metering_only_and_preserve_other_options(self):
+        for model in ("yutai.plug.fsov8m", "yutai.plug.fsov7m"):
+            flow = flow_module.YutaiOptionsFlow()
+            flow.config_entry = SimpleNamespace(data={**config_data(), "model": model}, options={"existing": 3})
+            form = await flow.async_step_init()
+            self.assertEqual("session_idle_timeout" in form["data_schema"], model.endswith("8m"))
+            result = await flow.async_step_init({"poll_interval": 60, "session_idle_timeout": 90})
+            self.assertEqual(result["data"]["existing"], 3)
+            self.assertEqual(result["data"].get("session_idle_timeout", 0), 90 if model.endswith("8m") else 0)
+
+    async def test_session_options_reject_bool_and_out_of_range(self):
+        flow = flow_module.YutaiOptionsFlow()
+        flow.config_entry = SimpleNamespace(data=config_data(), options={})
+        for value in (True, -1, 121, "90", None):
+            result = await flow.async_step_init({"poll_interval": 60, "session_idle_timeout": value})
+            self.assertEqual(result["errors"], {"base": "invalid_session_timeout"})
+
     async def test_model_selector_keeps_canonical_values_with_labels_in_each_language(self):
         form = await flow_module.YutaiConfigFlow().async_step_user()
         selector = form["data_schema"]["model"]

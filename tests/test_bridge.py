@@ -113,6 +113,154 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(launch.await_count, 2)
                 self.assertTrue(all(json.loads(p.inputs[0])["operation"] == "read" for p in processes))
 
+    async def test_worker_owned_connect_budget_is_never_restarted_by_outer_retry(self):
+        for attempts in (0, 1, 2, None, True, "2", 3, -1, self.config.gatt_ltmk):
+            with self.subTest(attempts=attempts):
+                process = FakeProcess(connection_failure(connection_attempts=attempts), code=1)
+                launch = AsyncMock(return_value=process)
+                with patch.object(bridge.asyncio, "create_subprocess_exec", launch):
+                    with self.assertRaises(bridge.BridgeError) as caught:
+                        await bridge.BridgeClient(cooldown=0).read(self.config)
+                self.assertEqual(launch.await_count, 1)
+                self.assertFalse(caught.exception.retryable)
+                expected = attempts if type(attempts) is int and 0 <= attempts <= 2 else None
+                self.assertEqual(caught.exception.connection_attempts, expected)
+                self.assertEqual(caught.exception.phase, "ble_connect")
+                self.assertEqual(caught.exception.protocol_error_code, "probe_failed")
+
+    async def test_single_attempt_background_read_keeps_interruptible_outer_retry(self):
+        now, pauses = [0], []
+        first = FakeProcess(connection_failure(connection_attempts=1, connect_retry_managed=False), code=1)
+        launch = AsyncMock(side_effect=[first, FakeProcess()])
+
+        async def sleep(delay):
+            self.assertIsNotNone(first.returncode)
+            pauses.append(delay)
+            now[0] += delay
+
+        with patch.object(bridge, "time", SimpleNamespace(monotonic=lambda: now[0])), patch.object(
+                bridge.asyncio, "create_subprocess_exec", launch), patch.object(bridge.asyncio, "sleep", sleep):
+            await bridge.BridgeClient(cooldown=0).read(self.config)
+        self.assertEqual(launch.await_count, 2)
+        self.assertEqual(pauses, [5])
+
+    async def test_two_failed_single_attempt_reads_never_start_a_third_worker(self):
+        now = [0]
+
+        async def pause(delay, interrupt):
+            now[0] += delay
+
+        failure = connection_failure(connection_attempts=1, connect_retry_managed=False)
+        launch = AsyncMock(side_effect=[FakeProcess(failure, code=1), FakeProcess(failure, code=1)])
+        with patch.object(bridge, "time", SimpleNamespace(monotonic=lambda: now[0])), patch.object(
+                bridge.asyncio, "create_subprocess_exec", launch), patch.object(bridge, "_read_pause", pause):
+            with self.assertRaises(bridge.BridgeError):
+                await bridge.BridgeClient(cooldown=0).read(self.config)
+        self.assertEqual(launch.await_count, 2)
+        self.assertEqual(now[0], 5)
+
+    def test_new_background_retry_requires_both_strict_metadata_fields(self):
+        cases = [
+            ({"connection_attempts": 1, "connect_retry_managed": False}, True),
+            ({"connection_attempts": 1, "connect_retry_managed": True}, False),
+            ({"connection_attempts": 2, "connect_retry_managed": False}, False),
+            ({"connection_attempts": 2, "connect_retry_managed": True}, False),
+            ({"connection_attempts": 0, "connect_retry_managed": False}, False),
+            ({"connection_attempts": True, "connect_retry_managed": False}, False),
+            ({"connection_attempts": 1, "connect_retry_managed": 0}, False),
+            ({"connection_attempts": 1, "connect_retry_managed": "false"}, False),
+            ({"connection_attempts": 1}, False),
+            ({"connect_retry_managed": False}, False),
+            ({}, True),
+        ]
+        for metadata, expected in cases:
+            with self.subTest(metadata=metadata):
+                report = json.loads(connection_failure(**metadata))
+                self.assertEqual(bridge._worker_error(report, self.config, setting=False).retryable, expected)
+                self.assertFalse(bridge._worker_error(report, self.config, setting=True).retryable)
+                self.assertFalse(bridge._worker_error(report, self.config, setting=False, relay=True).retryable)
+
+    def test_single_attempt_metadata_does_not_replace_cleanup_proofs(self):
+        for changes in ({"disconnect_attempted": False}, {"connected_after_cleanup": True},
+                        {"connection_attempted": False}, {"relay_writes": 1},
+                        {"cleanup_error_code": "disconnect_failed_or_timed_out"}):
+            report = json.loads(connection_failure(
+                connection_attempts=1, connect_retry_managed=False, **changes))
+            with self.subTest(changes=changes):
+                self.assertFalse(bridge._worker_error(report, self.config, setting=False).retryable)
+
+    def test_known_worker_failures_expose_only_fixed_diagnostic_codes(self):
+        cases = (
+            ("bluez_cache", "target_already_connected"),
+            ("bluez_cache", "target_not_seen"),
+            ("bluez_cache", "target_adapter_changed"),
+            ("bluez_cache", "target_absent_no_existing_discovery"),
+            ("ble_connect", "phase_timeout"),
+            ("authentication_a4", "mng1_ack_timeout"),
+            ("authentication_pubkey", "device_public_key_missing"),
+            ("authentication_pubkey", "public_key_complete_ack_missing"),
+            ("authentication_proof", "phase_timeout"),
+            ("protocol_exchange", "response_decrypt_or_validation_failed"),
+            ("session_verify", "session_relay_readback_mismatch"),
+            ("ble_connect", "connect_cleanup_failed"),
+        )
+        for phase, code in cases:
+            with self.subTest(phase=phase, code=code):
+                report = json.loads(connection_failure(
+                    phase=phase, error_code=code, error_class="ProbeError", connection_attempts=2))
+                error = bridge._worker_error(report, self.config, setting=False)
+                self.assertEqual(error.phase, phase)
+                self.assertEqual(error.protocol_error_code, code)
+                self.assertEqual(error.connection_attempts, 2)
+                self.assertFalse(error.retryable)
+                self.assertEqual(str(error), error.code)
+
+    def test_unknown_worker_diagnostics_never_expose_credentials(self):
+        secret = self.config.gatt_ltmk
+        report = json.loads(connection_failure(
+            phase=secret, error_code=secret, error_class=secret, error_message=secret,
+            connection_attempts=secret, phase_timings_seconds={secret: 1, "ble_connect": secret}))
+        error = bridge._worker_error(report, self.config, setting=False)
+        self.assertEqual(error.phase, "unknown")
+        self.assertEqual(error.protocol_error_code, "unknown")
+        self.assertIsNone(error.connection_attempts)
+        self.assertEqual(error.phase_timings_seconds, {})
+        self.assertNotIn(secret, repr(error))
+        self.assertNotIn(secret, repr(vars(error)))
+        direct = bridge.BridgeError(secret, phase=secret, protocol_error_code=secret,
+                                    connection_attempts=secret, phase_timings_seconds=secret)
+        self.assertNotIn(secret, repr(vars(direct)))
+
+    def test_mismatched_identity_cannot_supply_failure_diagnostics(self):
+        report = json.loads(connection_failure(
+            address="02:00:00:00:00:02", connection_attempts=2,
+            phase_timings_seconds={"ble_connect": 2.5}))
+        error = bridge._worker_error(report, self.config, setting=False)
+        self.assertEqual(error.code, "invalid_worker_report")
+        self.assertEqual(error.phase, "unknown")
+        self.assertEqual(error.protocol_error_code, "unknown")
+        self.assertIsNone(error.connection_attempts)
+        self.assertEqual(error.phase_timings_seconds, {})
+
+    def test_phase_timings_allow_only_fixed_keys_finite_bounded_numbers(self):
+        timings = {
+            "ble_connect": 0, "bluez_cache": 1.25, "authentication_proof": 120,
+            "cleanup": 0.15, "connect_retry_cooldown": 3,
+            "mtu_acquisition": -1, "authentication_subscribe": True,
+            "authentication_mcu": float("nan"), "authentication_a4": float("inf"),
+            "authentication_pubkey": 120.001, "protocol_exchange": 10 ** 1000,
+            "session_verify": self.config.gatt_ltmk, self.config.gatt_ltmk: 1,
+        }
+        error = bridge.BridgeError("protocol_failed", phase_timings_seconds=timings)
+        self.assertEqual(error.phase_timings_seconds, {
+            "ble_connect": 0.0, "bluez_cache": 1.25, "authentication_proof": 120.0,
+            "cleanup": 0.15, "connect_retry_cooldown": 3.0})
+        timings["ble_connect"] = self.config.gatt_ltmk
+        self.assertEqual(error.phase_timings_seconds["ble_connect"], 0.0)
+        self.assertNotIn(self.config.gatt_ltmk, repr(vars(error)))
+        for invalid in (None, [], True, self.config.gatt_ltmk):
+            self.assertEqual(bridge.BridgeError("worker_failed", phase_timings_seconds=invalid).phase_timings_seconds, {})
+
     async def test_second_read_failure_stops_and_safe_error_is_fixed(self):
         now = [0]
 

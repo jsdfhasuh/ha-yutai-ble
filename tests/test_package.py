@@ -27,7 +27,7 @@ class PackageTests(unittest.TestCase):
     def test_manifest_hacs_and_component_allowlist(self):
         component = ROOT / builder.COMPONENT
         manifest = json.loads((component / "manifest.json").read_text())
-        self.assertEqual(manifest["version"], "0.6.2")
+        self.assertEqual(manifest["version"], "0.7.0b1")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["codeowners"], ["@jsdfhasuh"])
         self.assertEqual(manifest["dependencies"], ["bluetooth"])

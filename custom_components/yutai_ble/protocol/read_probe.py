@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
@@ -10,6 +11,8 @@ import logging
 from pathlib import Path
 import re
 import sys
+import time
+from types import SimpleNamespace
 import zlib
 
 from device_identity import Target, validate_identity
@@ -17,6 +20,17 @@ from device_identity import Target, validate_identity
 READ_TID = 0x7201
 WORK_SECONDS = 62
 CLEANUP_SECONDS = 8
+CONNECT_COOLDOWN_SECONDS = 3.0
+INITIAL_CACHE_WAIT_SECONDS = 30
+RETRY_CACHE_WAIT_SECONDS = 10
+CACHE_POLL_SECONDS = 1.0
+CONNECT_ERROR_CLASSES = frozenset({"BleakError", "BleakDBusError", "BleakDeviceNotFoundError", "TimeoutError"})
+PHASE_TIMINGS = (
+    "dependencies", "bluez_cache", "ble_connect", "mtu_acquisition",
+    "authentication_subscribe", "authentication_mcu", "authentication_a4",
+    "authentication_pubkey", "authentication_proof", "protocol_exchange",
+    "connect_retry_cooldown", "cleanup",
+)
 VENDOR_HASHES = {
     "channel.py": "31b4804e20ea771c833193fc213ab6835386703a5bd857f16824705b460a490f",
     "miot_ble_specv2.py": "42220ea35bf9c84120a413f9c77af870eec082d16556149fe20a74b1f9ed095e",
@@ -30,6 +44,35 @@ class ProbeError(Exception):
 
 def fail(code):
     raise ProbeError(code)
+
+
+def reset_connection_telemetry(result, *, connect_retry=False):
+    if type(connect_retry) is not bool:
+        fail("connect_retry_invalid")
+    result["connection_attempts"] = 0
+    result["connect_retry_managed"] = connect_retry
+    result["phase_timings_seconds"] = {name: 0.0 for name in PHASE_TIMINGS}
+
+
+def connection_telemetry(result):
+    timings = result.get("phase_timings_seconds", {})
+    return {"connection_attempts": result.get("connection_attempts", 0),
+            "connect_retry_managed": result.get("connect_retry_managed", False),
+            "phase_timings_seconds": {name: timings.get(name, 0.0) for name in PHASE_TIMINGS}}
+
+
+@contextmanager
+def timed_phase(result, timing, phase=None):
+    if timing not in PHASE_TIMINGS:
+        fail("timing_phase_invalid")
+    if phase is not None:
+        result["phase"] = phase
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        timings = result.setdefault("phase_timings_seconds", {name: 0.0 for name in PHASE_TIMINGS})
+        timings[timing] = round(timings.get(timing, 0.0) + time.monotonic() - started, 6)
 
 
 def validated_input(data):
@@ -482,69 +525,69 @@ def make_client_class(upstream):
                     future.exception()
 
         async def connect(self):
-            self.result["phase"] = "ble_connect"
-            self.result["connection_attempted"] = True
-            await self.c.connect()
-            required = (upstream.CH_CTRL, auth, upstream.CMD, upstream.DAT, upstream.MCU)
-            for uuid in required:
-                if self.c.raw.services.get_characteristic(uuid) is None:
-                    fail("required_characteristic_missing")
-            self.capture_transport_metadata()
-            self.result["phase"] = "mtu_acquisition"
-            await self.acquire_transport_mtu()
-            self.result["phase"] = "authentication_subscribe"
-            self.ch = upstream.Channel(self.c, log=lambda _message: None)
-            self.configure_channel_capacity()
-            await self.ch.start()
-            await self.c.start_notify(upstream.DAT, self._on_dat)
-            await self.c.start_notify(upstream.CMD, self._on_cmd)
-            await self.c.start_notify(upstream.MCU, lambda _sender, _data: None)
-            self.result["phase"] = "authentication_mcu"
-            for packet in (b"\0", b"\x08\x01\0", b"\x03"):
-                await self.c.write_gatt_char(upstream.MCU, packet)
+            with timed_phase(self.result, "ble_connect", "ble_connect"):
+                self.result["connection_attempted"] = True
+                await self.c.connect()
+                required = (upstream.CH_CTRL, auth, upstream.CMD, upstream.DAT, upstream.MCU)
+                for uuid in required:
+                    if self.c.raw.services.get_characteristic(uuid) is None:
+                        fail("required_characteristic_missing")
+                self.capture_transport_metadata()
+            with timed_phase(self.result, "mtu_acquisition", "mtu_acquisition"):
+                await self.acquire_transport_mtu()
+            with timed_phase(self.result, "authentication_subscribe", "authentication_subscribe"):
+                self.ch = upstream.Channel(self.c, log=lambda _message: None)
+                self.configure_channel_capacity()
+                await self.ch.start()
+                await self.c.start_notify(upstream.DAT, self._on_dat)
+                await self.c.start_notify(upstream.CMD, self._on_cmd)
+                await self.c.start_notify(upstream.MCU, lambda _sender, _data: None)
+            with timed_phase(self.result, "authentication_mcu", "authentication_mcu"):
+                for packet in (b"\0", b"\x08\x01\0", b"\x03"):
+                    await self.c.write_gatt_char(upstream.MCU, packet)
+                    await asyncio.sleep(0.25)
+                self.check_callbacks()
+            with timed_phase(self.result, "authentication_a4", "authentication_a4"):
+                await self.c.write_gatt_char(upstream.CH_CTRL, b"\xa4")
+                await self.wait_handshake_event(self.mng1_ack_sent, "mng1_ack_timeout")
+                await asyncio.sleep(0.1)
+                self.check_callbacks()
+                if self.ch.dmtu < 64:
+                    fail("negotiated_channel_dmtu_too_small")
+            with timed_phase(self.result, "authentication_pubkey", "authentication_pubkey"):
+                self.public_key_window = True
+                private = upstream.ec.generate_private_key(upstream.ec.SECP256R1())
+                public = private.public_key().public_bytes(
+                    upstream.serialization.Encoding.X962,
+                    upstream.serialization.PublicFormat.UncompressedPoint,
+                )[1:]
+                await self.c.write_gatt_char(upstream.CH_CTRL, b"\x50\0\0\0")
+                await asyncio.sleep(0.2)
+                self.ch.rxlog.clear()
+                await self.send_auth_single(3, public)
+                device_public = await self.wait_device_public_key(require_complete=True)
+                await self.ch._send(b"\0\0\x03\0")
                 await asyncio.sleep(0.25)
-            self.check_callbacks()
-            self.result["phase"] = "authentication_a4"
-            await self.c.write_gatt_char(upstream.CH_CTRL, b"\xa4")
-            await self.wait_handshake_event(self.mng1_ack_sent, "mng1_ack_timeout")
-            await asyncio.sleep(0.1)
-            self.check_callbacks()
-            if self.ch.dmtu < 64:
-                fail("negotiated_channel_dmtu_too_small")
-            self.result["phase"] = "authentication_pubkey"
-            self.public_key_window = True
-            private = upstream.ec.generate_private_key(upstream.ec.SECP256R1())
-            public = private.public_key().public_bytes(
-                upstream.serialization.Encoding.X962,
-                upstream.serialization.PublicFormat.UncompressedPoint,
-            )[1:]
-            await self.c.write_gatt_char(upstream.CH_CTRL, b"\x50\0\0\0")
-            await asyncio.sleep(0.2)
-            self.ch.rxlog.clear()
-            await self.send_auth_single(3, public)
-            device_public = await self.wait_device_public_key(require_complete=True)
-            await self.ch._send(b"\0\0\x03\0")
-            await asyncio.sleep(0.25)
-            self.check_callbacks()
-            self.result["phase"] = "authentication_proof"
-            shared = private.exchange(upstream.ec.ECDH(), upstream.ec.EllipticCurvePublicKey.from_encoded_point(
-                upstream.ec.SECP256R1(), b"\x04" + device_public,
-            ))
-            self.k = upstream.hkdf(shared + self.ltmk, upstream.SALT, upstream.INFO, 64)
-            proof = upstream.AESCCM(self.k[16:32], tag_length=4).encrypt(
-                bytes(range(0x10, 0x1C)), zlib.crc32(device_public).to_bytes(4, "little"), None,
-            )
-            self.ch.rxlog.clear()
-            self.check_callbacks()
-            await self.send_auth_single(5, proof)
-            await asyncio.wait_for(self.auth_event.wait(), 3)
-            self.check_callbacks()
-            if not self.authenticated:
-                fail("authentication_not_confirmed")
-            self.result["authentication_verified"] = True
-            self.result["phase"] = "protocol_exchange"
-            await self.exchange(self.pack(1, 0xF0), 1, 0)
-            self.result["f0_verified"] = self.f0_verified
+                self.check_callbacks()
+            with timed_phase(self.result, "authentication_proof", "authentication_proof"):
+                shared = private.exchange(upstream.ec.ECDH(), upstream.ec.EllipticCurvePublicKey.from_encoded_point(
+                    upstream.ec.SECP256R1(), b"\x04" + device_public,
+                ))
+                self.k = upstream.hkdf(shared + self.ltmk, upstream.SALT, upstream.INFO, 64)
+                proof = upstream.AESCCM(self.k[16:32], tag_length=4).encrypt(
+                    bytes(range(0x10, 0x1C)), zlib.crc32(device_public).to_bytes(4, "little"), None,
+                )
+                self.ch.rxlog.clear()
+                self.check_callbacks()
+                await self.send_auth_single(5, proof)
+                await asyncio.wait_for(self.auth_event.wait(), 3)
+                self.check_callbacks()
+                if not self.authenticated:
+                    fail("authentication_not_confirmed")
+                self.result["authentication_verified"] = True
+            with timed_phase(self.result, "protocol_exchange", "protocol_exchange"):
+                await self.exchange(self.pack(1, 0xF0), 1, 0)
+                self.result["f0_verified"] = self.f0_verified
 
         async def read_switch(self):
             self.result["phase"] = "read_property"
@@ -601,7 +644,157 @@ def active_scan(objects):
     return adapters[0][0] if len(adapters) == 1 and adapters[0][1].get("Discovering") else None
 
 
-async def run_probe(target_config, *, client_factory=None, operation=None):
+async def wait_for_cached_target(objects, address, *, wait_seconds, expected_adapter=None):
+    """Observe existing discovery only; bind reappearing devices to its adapter."""
+    snapshot = await objects()
+    target = find_target(snapshot, address)
+    discovery = None
+    if target is None:
+        discovery = active_scan(snapshot)
+        if discovery is None:
+            fail("target_absent_no_existing_discovery")
+        if expected_adapter is not None and discovery != expected_adapter:
+            fail("target_adapter_changed")
+        expected_adapter = discovery
+        deadline = time.monotonic() + wait_seconds
+        while target is None and time.monotonic() < deadline:
+            await asyncio.sleep(min(CACHE_POLL_SECONDS, max(0, deadline - time.monotonic())))
+            snapshot = await objects()
+            if active_scan(snapshot) != discovery:
+                fail("existing_discovery_stopped_or_changed")
+            target = find_target(snapshot, address)
+        if target is None:
+            fail("target_not_seen")
+    if expected_adapter is not None and target[1].get("Adapter") != expected_adapter:
+        fail("target_adapter_changed")
+    return target
+
+
+async def close_client(client, result):
+    """Bound cleanup without changing the operation's failure phase."""
+    cancelled = False
+    for name in ("cleanup_error_code", "cleanup_error_class"):
+        result.pop(name, None)
+    try:
+        with timed_phase(result, "cleanup"):
+            task = asyncio.create_task(asyncio.wait_for(client.close(), CLEANUP_SECONDS))
+            while not task.done():
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    cancelled = True
+            task.result()
+    except (Exception, asyncio.CancelledError) as error:
+        result["cleanup_error_code"] = "disconnect_failed_or_timed_out"
+        result["cleanup_error_class"] = type(error).__name__
+        if isinstance(error, asyncio.CancelledError):
+            cancelled = True
+    try:
+        result["connected_after_cleanup"] = client.c.is_connected
+    except Exception:
+        result["connected_after_cleanup"] = None
+    if result["connected_after_cleanup"] is not False:
+        result["cleanup_error_code"] = "still_connected_or_unknown"
+    if cancelled:
+        raise asyncio.CancelledError
+    return result["connected_after_cleanup"] is False and not result.get("cleanup_error_code")
+
+
+def retryable_connect_error(error, result):
+    return (
+        result.get("phase") == "ble_connect"
+        and type(error).__name__ in CONNECT_ERROR_CLASSES
+        and result.get("connection_attempted") is True
+        and type(result.get("relay_writes")) is int and result["relay_writes"] == 0
+        and result.get("relay_write_attempts", 0) == 0
+        and result.get("setting_write_attempts", 0) == 0
+        and result.get("maybe_executed") is not True
+    )
+
+
+async def open_connection(target_config, result, owner, *, client_factory=None, connect_retry=False):
+    """Open at most twice inside the caller's shared WORK_SECONDS deadline.
+
+    The caller owns each bus/client before its first await, including failures.
+    Business operations must only run after this helper returns.
+    """
+    if type(connect_retry) is not bool:
+        fail("connect_retry_invalid")
+    result["connect_retry_managed"] = connect_retry
+    with timed_phase(result, "dependencies", "dependencies"):
+        from bleak import BleakClient
+        from bleak.backends.device import BLEDevice
+        from dbus_fast import Message, MessageType, Variant
+        from dbus_fast.aio import MessageBus
+
+        upstream = load_vendor()
+
+    def unwrap(value):
+        if isinstance(value, Variant):
+            return unwrap(value.value)
+        if isinstance(value, dict):
+            return {name: unwrap(item) for name, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [unwrap(item) for item in value]
+        return value
+
+    async def objects():
+        reply = await owner.bus.call(Message(destination="org.bluez", path="/",
+            interface="org.freedesktop.DBus.ObjectManager", member="GetManagedObjects"))
+        if reply.message_type == MessageType.ERROR:
+            fail("bluez_query_failed")
+        return unwrap(reply.body[0])
+
+    with timed_phase(result, "bluez_cache", "bluez_cache"):
+        owner.bus = MessageBus(bus_address="unix:path=/run/dbus/system_bus_socket")
+        await owner.bus.connect()
+        target = await wait_for_cached_target(objects, target_config.address,
+                                             wait_seconds=INITIAL_CACHE_WAIT_SECONDS)
+        adapter = target[1].get("Adapter")
+        if type(adapter) is not str:
+            fail("target_adapter_ambiguous")
+
+    for attempt in range(2 if connect_retry else 1):
+        with timed_phase(result, "bluez_cache", "bluez_cache"):
+            # Recheck before each new transport; never adopt a foreign connection.
+            target = await wait_for_cached_target(
+                objects, target_config.address, expected_adapter=adapter,
+                wait_seconds=RETRY_CACHE_WAIT_SECONDS if attempt else INITIAL_CACHE_WAIT_SECONDS,
+            )
+            path, props = target
+            result["adapter_path"] = props.get("Adapter")
+            if type(props.get("RSSI")) is int:
+                result["cached_rssi_before_connect_dbm"] = props["RSSI"]
+            device = BLEDevice(props["Address"], props.get("Name"), {"path": path, "props": props})
+            raw = BleakClient(device, pair=False, timeout=20)
+            result.pop("handshake", None)
+            result.pop("connected_after_cleanup", None)
+            result["connection_attempted"] = False
+            result["disconnect_attempted"] = False
+            owner.client = (client_factory or make_client_class)(upstream)(device, target_config.key, raw, result)
+        result["connection_attempts"] = result.get("connection_attempts", 0) + 1
+        connect_started = time.monotonic()
+        try:
+            try:
+                await owner.client.connect()
+            finally:
+                result["connect_auth_elapsed_seconds"] = round(
+                    result.get("connect_auth_elapsed_seconds", 0.0) + time.monotonic() - connect_started, 6)
+        except Exception as error:
+            if not connect_retry or attempt or not retryable_connect_error(error, result):
+                raise
+            if not await close_client(owner.client, result):
+                fail("connect_cleanup_failed")
+            owner.client = None
+            with timed_phase(result, "connect_retry_cooldown", "connect_retry_cooldown"):
+                retry_at = time.monotonic() + CONNECT_COOLDOWN_SECONDS
+                while retry_at > time.monotonic():
+                    await asyncio.sleep(retry_at - time.monotonic())
+        else:
+            return
+
+
+async def run_probe(target_config, *, client_factory=None, operation=None, connect_retry=False):
     key = target_config.key
     result = {
         "operation": "read_property_only", "address": target_config.address, "model": target_config.model,
@@ -610,67 +803,16 @@ async def run_probe(target_config, *, client_factory=None, operation=None):
         "authentication_verified": False, "f0_verified": False,
         "cache_wait_limit_seconds": 30, "phase": "dependencies",
     }
-    bus = None
-    client = None
+    reset_connection_telemetry(result, connect_retry=connect_retry)
+    owner = SimpleNamespace(bus=None, client=None)
     loop = asyncio.get_running_loop()
     old_handler = loop.get_exception_handler()
     loop.set_exception_handler(lambda _loop, _context: None)
 
     async def work():
-        nonlocal bus, client
-        from bleak import BleakClient
-        from bleak.backends.device import BLEDevice
-        from dbus_fast import Message, MessageType, Variant
-        from dbus_fast.aio import MessageBus
-
-        def unwrap(value):
-            if isinstance(value, Variant):
-                return unwrap(value.value)
-            if isinstance(value, dict):
-                return {name: unwrap(item) for name, item in value.items()}
-            if isinstance(value, (list, tuple)):
-                return [unwrap(item) for item in value]
-            return value
-
-        async def objects():
-            reply = await bus.call(Message(destination="org.bluez", path="/",
-                interface="org.freedesktop.DBus.ObjectManager", member="GetManagedObjects"))
-            if reply.message_type == MessageType.ERROR:
-                fail("bluez_query_failed")
-            return unwrap(reply.body[0])
-
-        upstream = load_vendor()
-        result["phase"] = "bluez_cache"
-        bus = await MessageBus(bus_address="unix:path=/run/dbus/system_bus_socket").connect()
-        snapshot = await objects()
-        target = find_target(snapshot, target_config.address)
-        if target is None:
-            scan = active_scan(snapshot)
-            if scan is None:
-                fail("target_absent_no_existing_discovery")
-            deadline = loop.time() + 30
-            while target is None and loop.time() < deadline:
-                await asyncio.sleep(min(1, max(0, deadline - loop.time())))
-                snapshot = await objects()
-                if active_scan(snapshot) != scan:
-                    fail("existing_discovery_stopped_or_changed")
-                target = find_target(snapshot, target_config.address)
-            if target is None:
-                fail("target_not_seen")
-        # Recheck immediately before connecting; an existing connection is never adopted.
-        target = find_target(await objects(), target_config.address)
-        if target is None:
-            fail("target_disappeared")
-        path, props = target
-        result["adapter_path"] = props.get("Adapter")
-        if type(props.get("RSSI")) is int:
-            result["cached_rssi_before_connect_dbm"] = props["RSSI"]
-        device = BLEDevice(props["Address"], props.get("Name"), {"path": path, "props": props})
-        raw = BleakClient(device, pair=False, timeout=20)
-        client = (client_factory or make_client_class)(upstream)(device, key, raw, result)
-        connect_started = loop.time()
-        await client.connect()
-        result["connect_auth_elapsed_seconds"] = round(loop.time() - connect_started, 3)
+        await open_connection(target_config, result, owner, client_factory=client_factory,
+                              connect_retry=connect_retry)
+        client = owner.client
         if operation is None:
             read_started = loop.time()
             result["property"] = await client.read_switch()
@@ -687,19 +829,16 @@ async def run_probe(target_config, *, client_factory=None, operation=None):
             "phase_timeout" if isinstance(error, TimeoutError) else "probe_failed")
         result["error_class"] = type(error).__name__
     finally:
-        if client is not None:
+        try:
+            if owner.client is not None:
+                await close_client(owner.client, result)
+        finally:
             try:
-                await asyncio.wait_for(client.close(), CLEANUP_SECONDS)
-                result["connected_after_cleanup"] = client.c.is_connected
-                if result["connected_after_cleanup"]:
-                    result["cleanup_error_code"] = "still_connected"
-            except Exception as error:
-                result["cleanup_error_code"] = "disconnect_failed_or_timed_out"
-                result["cleanup_error_class"] = type(error).__name__
-        if bus is not None:
-            bus.disconnect()
-        loop.set_exception_handler(old_handler)
-        key = b""
+                if owner.bus is not None:
+                    owner.bus.disconnect()
+            finally:
+                loop.set_exception_handler(old_handler)
+                key = b""
     return result
 
 

@@ -125,19 +125,63 @@ class ReleaseTests(unittest.TestCase):
         self.files[2].write_text("".join(f"{publisher.digest(item)}  {item.name}\n" for item in self.files[:2]))
 
     def test_trigger_requires_exact_main_push_and_version_subject(self):
+        version = "1.2.3"
         environment = {"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main", "GITHUB_SHA": SHA}
-        event = {"after": SHA, "head_commit": {"id": SHA, "message": f"Release v{self.version}\n\nDetails"}}
-        self.assertTrue(publisher.is_release_push(environment, event, self.version))
+        event = {"after": SHA, "head_commit": {"id": SHA, "message": f"Release v{version}\n\nDetails"}}
+        self.assertTrue(publisher.is_release_push(environment, event, version))
         for key, value in (("GITHUB_EVENT_NAME", "pull_request"), ("GITHUB_EVENT_NAME", "workflow_dispatch"),
-                           ("GITHUB_REF", "refs/heads/other"), ("GITHUB_REF", f"refs/tags/v{self.version}"),
+                           ("GITHUB_REF", "refs/heads/other"), ("GITHUB_REF", f"refs/tags/v{version}"),
                            ("GITHUB_SHA", "b" * 40)):
             with self.subTest(key=key, value=value):
-                self.assertFalse(publisher.is_release_push({**environment, key: value}, event, self.version))
-        for subject in ("Ordinary commit", f"Release v{self.version} ", f"Release v{self.version} extra", "Release v999.0.0", ""):
+                self.assertFalse(publisher.is_release_push({**environment, key: value}, event, version))
+        for subject in ("Ordinary commit", f"Release v{version} ", f"Release v{version} extra", "Release v999.0.0", ""):
             with self.subTest(subject=subject):
                 changed = {**event, "head_commit": {"id": SHA, "message": subject}}
-                self.assertFalse(publisher.is_release_push(environment, changed, self.version))
-        self.assertFalse(publisher.is_release_push(environment, {}, self.version))
+                self.assertFalse(publisher.is_release_push(environment, changed, version))
+        self.assertFalse(publisher.is_release_push(environment, {}, version))
+
+    def publisher_cli(self, version, subject, *arguments):
+        root = self.directory / "cli"
+        (root / "tools").mkdir(parents=True, exist_ok=True)
+        (root / builder.COMPONENT).mkdir(parents=True, exist_ok=True)
+        for name in ("publish_release.py", "build_release.py"):
+            (root / "tools" / name).write_bytes((ROOT / "tools" / name).read_bytes())
+        (root / builder.COMPONENT / "manifest.json").write_text(json.dumps({"version": version}))
+        event = root / "event.json"
+        event.write_text(json.dumps({"after": SHA, "head_commit": {"id": SHA, "message": subject}}))
+        output = root / "output.txt"
+        output.write_text("")
+        environment = {**os.environ, "PATH": "", "GITHUB_EVENT_NAME": "push",
+                       "GITHUB_REF": "refs/heads/main", "GITHUB_SHA": SHA,
+                       "GITHUB_EVENT_PATH": str(event), "GITHUB_OUTPUT": str(output)}
+        result = subprocess.run([sys.executable, "-B", str(root / "tools/publish_release.py"), *arguments],
+                                env=environment, text=True, capture_output=True, timeout=20)
+        return result, output.read_text()
+
+    def test_check_trigger_cli_skips_prerelease_without_failing_ci(self):
+        for version in ("0.7.0b1", "0.7.0rc1"):
+            for subject in ("Preserve experimental source", f"Release v{version}"):
+                with self.subTest(version=version, subject=subject):
+                    result, output = self.publisher_cli(version, subject, "--check-trigger")
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(result.stdout, "publish=false\n")
+                    self.assertEqual(output, result.stdout)
+
+    def test_check_trigger_cli_still_recognizes_only_explicit_stable_release(self):
+        for subject, publish in (("Preserve source", "false"), ("Release v1.2.3", "true")):
+            with self.subTest(subject=subject):
+                result, output = self.publisher_cli("1.2.3", subject, "--check-trigger")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, f"publish={publish}\n")
+                self.assertEqual(output, result.stdout)
+
+    def test_publish_and_verify_cli_continue_rejecting_prerelease(self):
+        for arguments in ((), ("--verify-only",)):
+            with self.subTest(arguments=arguments):
+                result, output = self.publisher_cli("0.7.0b1", "Release v0.7.0b1", *arguments)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Expected a stable release version", result.stderr)
+                self.assertEqual(output, "")
 
     def test_real_packages_pass_local_validation_and_verify_only(self):
         self.assertEqual(publisher.validate_artifacts(self.directory / "dist", self.manifest), self.files)
@@ -148,8 +192,12 @@ class ReleaseTests(unittest.TestCase):
             [sys.executable, "-B", str(ROOT / "tools/publish_release.py"), "--verify-only", "--artifacts", str(self.directory / "dist")],
             env=environment, text=True, capture_output=True, timeout=20,
         )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(f"Verified v{self.version}", result.stdout)
+        if self.version.endswith("b1"):
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Expected a stable release version", result.stderr)
+        else:
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(f"Verified v{self.version}", result.stdout)
 
     def test_wrong_filenames_and_checksum_fail(self):
         unexpected = self.directory / "dist" / "unexpected.zip"

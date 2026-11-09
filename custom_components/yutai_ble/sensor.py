@@ -73,4 +73,9 @@ class YutaiDiagnostic(YutaiEntity, SensorEntity):
             return None
         interval = self.coordinator.update_interval
         return {"last_error": self.coordinator.last_error_code,
+                "last_error_phase": self.coordinator.last_error_phase,
+                "last_protocol_error": self.coordinator.last_protocol_error,
+                "session_idle_timeout_seconds": self.coordinator.session_idle_timeout,
+                "last_relay_verified_at": self.coordinator.last_relay_success_at,
+                **self.coordinator.last_operation_metrics,
                 "poll_interval_seconds": int(interval.total_seconds()) if interval else None}

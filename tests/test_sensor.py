@@ -46,6 +46,8 @@ sensor = load_sensor()
 class DiagnosticTests(unittest.TestCase):
     def setUp(self):
         self.coordinator = SimpleNamespace(last_success_at=None, last_error_code=None,
+                                           last_error_phase=None, last_protocol_error=None,
+                                           session_idle_timeout=0, last_relay_success_at=None, last_operation_metrics={},
                                            consecutive_failures=0, last_update_success=False,
                                            update_interval=timedelta(seconds=60))
         self.entities = {field: sensor.YutaiDiagnostic(self.coordinator, field) for field in
@@ -66,7 +68,9 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(self.entities["consecutive_failures"].native_value, 4)
         self.assertEqual(self.entities["last_success"].native_value, prior)
         self.assertEqual(self.entities["connection_status"].extra_state_attributes,
-                         {"last_error": "read_failed", "poll_interval_seconds": 300})
+                         {"last_error": "read_failed", "poll_interval_seconds": 300,
+                          "last_error_phase": None, "last_protocol_error": None,
+                          "session_idle_timeout_seconds": 0, "last_relay_verified_at": None})
 
     def test_success_requires_both_verification_and_timestamp(self):
         self.coordinator.last_update_success = True

@@ -12,6 +12,31 @@ from test_sensor import sensor
 
 
 class DiagnosticUpdateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_connection_failure_exposes_safe_phase_and_retry_count(self):
+        self.coordinator.bridge.read = AsyncMock(side_effect=bridge.BridgeError(
+            "ble_connect_failed", phase="ble_connect", protocol_error_code="probe_failed",
+            connection_attempts=2, phase_timings_seconds={"ble_connect": 4.2, "cleanup": 0.3}))
+        await self.coordinator.async_request_refresh()
+        attrs = self.entities["connection_status"].extra_state_attributes
+        self.assertEqual(attrs["last_error_phase"], "ble_connect")
+        self.assertEqual(attrs["last_protocol_error"], "probe_failed")
+        self.assertEqual(attrs["connection_attempts"], 2)
+        self.assertEqual(attrs["phase_timings_seconds"], {"ble_connect": 4.2, "cleanup": 0.3})
+        self.coordinator.bridge.read = AsyncMock(return_value=report())
+        await self.coordinator.async_request_refresh()
+        self.assertIsNone(self.coordinator.last_error_phase)
+        self.assertIsNone(self.coordinator.last_protocol_error)
+
+    async def test_success_timing_attributes_discard_invalid_values_and_unknown_names(self):
+        self.coordinator.bridge.read = AsyncMock(return_value={**report(),
+            "connection_attempts": 1, "phase_timings_seconds": {
+                "ble_connect": 2.123456, "authentication_proof": float("nan"),
+                "secret": "private", "cleanup": True}})
+        await self.coordinator.async_request_refresh()
+        attrs = self.entities["connection_status"].extra_state_attributes
+        self.assertEqual(attrs["connection_attempts"], 1)
+        self.assertEqual(attrs["phase_timings_seconds"], {"ble_connect": 2.1235})
+
     async def asyncSetUp(self):
         self.coordinator = coordinator_module.YutaiCoordinator(
             None, SimpleNamespace(data=config_data(), options={}))

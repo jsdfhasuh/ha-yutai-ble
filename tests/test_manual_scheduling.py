@@ -450,4 +450,6 @@ class BridgeSchedulingTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(task.done())
             self.assertFalse(process.terminated)
             release.set()
-            self.assertEqual(await task, {})
+            result = await task
+            self.assertEqual(set(result), {"queue_wait_seconds", "worker_elapsed_seconds"})
+            self.assertTrue(all(type(value) is float and value >= 0 for value in result.values()))

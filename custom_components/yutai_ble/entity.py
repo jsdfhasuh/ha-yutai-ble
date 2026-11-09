@@ -41,6 +41,8 @@ class YutaiEntity(CoordinatorEntity[YutaiCoordinator]):
 
     @property
     def available(self) -> bool:
+        if self.field == "relay_output" and self.coordinator.relay_readback is not None:
+            return True
         if not super().available or self.coordinator.data is None:
             return False
         data = self.coordinator.data
@@ -50,6 +52,8 @@ class YutaiEntity(CoordinatorEntity[YutaiCoordinator]):
 
     @property
     def verified_value(self):
+        if self.field == "relay_output" and self.coordinator.relay_readback is not None:
+            return self.coordinator.relay_readback
         data = self.coordinator.data
         if data is None:
             return None

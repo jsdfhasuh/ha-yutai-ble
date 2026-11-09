@@ -24,7 +24,8 @@ def is_release_push(environment, event, version):
     lines = head.get("message", "").splitlines()
     sha = environment.get("GITHUB_SHA", "")
     return (
-        environment.get("GITHUB_EVENT_NAME") == "push"
+        re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None
+        and environment.get("GITHUB_EVENT_NAME") == "push"
         and environment.get("GITHUB_REF") == "refs/heads/main"
         and re.fullmatch(r"[0-9a-f]{40}", sha) is not None
         and event.get("after") == head.get("id") == sha
@@ -176,7 +177,6 @@ def main():
     args = parser.parse_args()
     manifest = json.loads((ROOT / COMPONENT / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Expected a stable release version")
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     event = json.loads(Path(event_path).read_text(encoding="utf-8")) if event_path else {}
     triggered = is_release_push(os.environ, event, version)
@@ -187,6 +187,7 @@ def main():
                 stream.write(output)
         print(output, end="")
         return
+    require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Expected a stable release version")
     notes = ROOT / "docs" / "releases" / f"v{version}.md"
     require(notes.is_file() and notes.read_text(encoding="utf-8").strip(), "Release notes are missing")
     files = validate_artifacts(args.artifacts, manifest)

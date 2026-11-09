@@ -35,15 +35,18 @@
         "title": "Polling",
         "description": "Set how often the socket state is read automatically.",
         "data": {
-          "poll_interval": "Polling interval (seconds)"
+          "poll_interval": "Polling interval (seconds)",
+          "session_idle_timeout": "Retain authenticated connection (seconds)"
         },
         "data_description": {
-          "poll_interval": "Default: 60 seconds. Range: 30–3600 seconds. Lower values refresh the state more frequently."
+          "poll_interval": "Default: 60 seconds. Range: 30–3600 seconds. Lower values refresh the state more frequently.",
+          "session_idle_timeout": "Metering model only. 0 disables reuse; 1-120 retains an idle connection. 90 seconds can cover 60-second polling. Mi Home direct Bluetooth may be unavailable while connected. Sessions renew after 300 seconds or 64 requests."
         }
       }
     },
     "error": {
-      "invalid_interval": "Enter an integer from 30 to 3600 seconds, for example 60."
+      "invalid_interval": "Enter an integer from 30 to 3600 seconds, for example 60.",
+      "invalid_session_timeout": "Enter an integer from 0 to 120 seconds."
     }
   },
   "selector": {

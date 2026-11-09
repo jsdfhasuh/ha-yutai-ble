@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.7.0b1 - Experimental Closeout Snapshot
+
+- Add optional retained authenticated sessions for fsov8m, disabled by default.
+  Bound idle retention to 120 seconds and renew after 300 seconds or 64 protocol
+  requests; clean up on errors, idle expiry and entry unload.
+- Read only the relay before a manual relay command, write only when needed,
+  and independently read it back. Publish relay verification separately from a
+  complete snapshot; refresh metering and settings later at low priority.
+- Retain manual FIFO priority, bounded duplicate coalescing and complete
+  setting verification. Never replay an uncertain SET automatically.
+- Retry a known transient connection failure at most once before manual device
+  operations, with a fresh authenticated session, confirmed disconnection,
+  cooldown and a shared work budget. Keep background retries interruptible by
+  manual work and prevent nested retries from multiplying attempts.
+- If a timed-out device disappears from BlueZ, wait for the existing scanner to
+  rediscover it. Do not start scans, clear caches or take over foreign links.
+- Add allowlisted failure phase/code and numeric stage timings, including failed
+  attempts, plus offline coverage for cold-connect and session lifecycle paths.
+
+Six recorded cold connections succeeded on their first attempt, but connection
+plus authentication still took 4.34-8.91 seconds, excluding queueing and device
+reads. Earlier retained-session HA relay calls took 0.49-1.06 seconds; those are
+not cold-connection measurements. This small sample does not establish long-term
+reliability or general hardware/firmware compatibility. No universal single-link
+hardware limitation is asserted.
+
+This is an experimental source snapshot, not a new stable release. Hardware
+validation and feature development are paused; existing protocol research and
+tests are retained. See [closeout and validation boundaries](docs/CLOSEOUT.md).
+
 ## 0.6.2
 
 - Translate model choices in the configuration form while preserving their

@@ -65,7 +65,8 @@ async def run_request(target, setting):
         factory = lambda upstream: make_control_client(upstream, *setting, codec_module=selected_codec)
         operation = perform_control
         good_status = "setting_verified"
-    result = await read.run_probe(target, client_factory=factory, operation=operation)
+    result = await read.run_probe(target, client_factory=factory, operation=operation,
+                                  connect_retry=setting is not None)
     relay_writes = result.get("relay_writes")
     if relay:
         relay_ok = (

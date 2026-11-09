@@ -13,6 +13,7 @@ from .const import (
     FIELD_KINDS,
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
+    MAX_SESSION_IDLE_TIMEOUT,
     MODEL_FIELDS,
     MODEL_SELECT_OPTIONS,
     SUPPORTED_MODEL,
@@ -58,6 +59,12 @@ class Snapshot:
     measurements: dict[str, float | bool | None]
 
 
+@dataclass(frozen=True, slots=True)
+class RelayResult:
+    value: bool
+    connection_reused: bool
+
+
 def validate_config(data: Mapping[str, Any]) -> DeviceConfig:
     """Accept a supported model, normalized address and a 32-byte key."""
     if not isinstance(data, Mapping) or set(data) - {
@@ -83,6 +90,57 @@ def validate_poll_interval(value: Any) -> int:
     if type(value) is not int or not MIN_POLL_INTERVAL <= value <= MAX_POLL_INTERVAL:
         raise ValidationError("invalid_interval")
     return value
+
+
+def validate_session_idle_timeout(value: Any) -> int:
+    if type(value) is not int or not 0 <= value <= MAX_SESSION_IDLE_TIMEOUT:
+        raise ValidationError("invalid_session_timeout")
+    return value
+
+
+def _validate_session(config: DeviceConfig, report: dict) -> None:
+    if (config.model != SUPPORTED_MODEL
+            or report.get("transport") != "retained_session"
+            or report.get("address") != config.address
+            or report.get("model") != config.model
+            or any(report.get(key) is not True for key in (
+                "transaction_complete", "session_healthy", "session_connected",
+                "authentication_verified", "f0_verified"))
+            or type(report.get("connection_reused")) is not bool
+            or "connected_after_cleanup" in report):
+        raise ValidationError("unverified_session")
+
+
+def normalize_relay_report(config: DeviceConfig, report: Any, expected: bool) -> RelayResult:
+    """A relay-only readback is never a complete settings/meter snapshot."""
+    if not isinstance(report, dict) or type(expected) is not bool:
+        raise ValidationError("invalid_report")
+    _validate_session(config, report)
+    initial = report.get("initial_relay_state")
+    writes = report.get("relay_writes")
+    attempts = report.get("relay_write_attempts")
+    properties = report.get("properties")
+    if (report.get("status") != "relay_session_verified"
+            or report.get("operation") != "relay_control"
+            or report.get("verification_scope") != "relay_only"
+            or report.get("verified") is not True
+            or report.get("requested_value") is not expected
+            or report.get("observed_relay_state") is not expected
+            or type(initial) is not bool
+            or type(writes) is not int or writes != int(initial is not expected)
+            or type(attempts) is not int or attempts != writes
+            or report.get("maybe_executed") is not bool(writes)
+            or report.get("initial_relay_verified") is not True
+            or report.get("settings_unchanged") is not None
+            or not isinstance(properties, list) or len(properties) != 1):
+        raise ValidationError("unverified_relay")
+    item = properties[0]
+    if (not isinstance(item, dict) or type(item.get("siid")) is not int
+            or type(item.get("piid")) is not int
+            or (item["siid"], item["piid"]) != (2, 1)
+            or _property_value(item, boolean=True) is not expected):
+        raise ValidationError("relay_readback_mismatch")
+    return RelayResult(expected, report["connection_reused"])
 
 
 def _capabilities(data: Any, model: str) -> dict[str, Capability]:
@@ -189,19 +247,26 @@ def normalize_report(
     """Validate all safety attestations; discard the raw report afterwards."""
     if not isinstance(report, dict) or operation not in {"read", "setting", "relay"}:
         raise ValidationError("invalid_report")
+    retained = report.get("transport") == "retained_session"
+    if retained:
+        _validate_session(config, report)
+        if (operation != "read" or report.get("operation") != "read"
+                or report.get("verification_scope") != "full"):
+            raise ValidationError("unverified_report")
     if (
         report.get("address") != config.address
         or report.get("model") != config.model
         or report.get("authentication_verified") is not True
         or report.get("f0_verified") is not True
-        or report.get("connected_after_cleanup") is not False
+        or (not retained and report.get("connected_after_cleanup") is not False)
     ):
         raise ValidationError("unverified_report")
     writes = report.get("relay_writes")
     if type(writes) is not int or (operation != "relay" and writes != 0):
         raise ValidationError("unverified_report")
     if operation == "read":
-        if report.get("status") not in {"settings_scan_succeeded", "read_verified"}:
+        allowed = {"read_session_verified"} if retained else {"settings_scan_succeeded", "read_verified"}
+        if report.get("status") not in allowed:
             raise ValidationError("unverified_report")
     elif operation == "setting":
         if report.get("status") != "setting_verified" or report.get("verified") is not True:
@@ -267,6 +332,13 @@ def normalize_report(
         by_id[identity] = item
     for identity in duplicates:
         by_id.pop(identity)
+    if retained:
+        expected = {(2, 1), (4, 2), (4, 3), (4, 4),
+                    *((5, index) for index in range(1, 8)), (7, 1), (7, 2)}
+        if (set(by_id) != expected or len(properties) != len(expected)
+                or any(_property_value(item, boolean=identity in {(2, 1), (7, 1), (7, 2)}) is None
+                       for identity, item in by_id.items())):
+            raise ValidationError("incomplete_session_snapshot")
     measurements = {
         "voltage": _property_value(by_id.get((4, 3))) if config.model == SUPPORTED_MODEL else None,
         "current": _property_value(by_id.get((4, 4))) if config.model == SUPPORTED_MODEL else None,
